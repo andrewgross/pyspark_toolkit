@@ -4,7 +4,7 @@ from pyspark.sql import functions as F
 from pyspark.sql import types as T
 
 
-def string_to_int(col: Union[str, F.Column]) -> F.Column[T.LongType()]:
+def string_to_int(col: Union[str, F.Column]) -> "F.Column[T.LongType()]":
     """
     Take a string, encode it as utf-8, and convert those bytes to a bigint
 
@@ -12,7 +12,7 @@ def string_to_int(col: Union[str, F.Column]) -> F.Column[T.LongType()]:
     """
     return F.conv(F.hex(F.to_binary(col, F.lit("utf-8"))), 16, 10).cast("bigint")
 
-def xor(col1: Union[str, F.Column], col2: Union[str, F.Column]) -> F.Column[T.LongType()]:
+def xor(col1: Union[str, F.Column], col2: Union[str, F.Column]) -> "F.Column[T.LongType()]":
     """
     Currently takes two columns (string or reference) of string/bytes
 
