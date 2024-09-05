@@ -6,26 +6,37 @@ from pyspark.sql import types as T
 from pyspark_utils.helpers import string_to_int
 
 
-def xor(col1: Union[str, F.Column], col2: Union[str, F.Column]) -> "F.Column[T.LongType()]":
+def xor_word(
+    col1: Union[str, F.Column], col2: Union[str, F.Column]
+) -> "F.Column[T.LongType()]":
     """
-    Currently takes two columns (string or reference) of string/bytes
+    Tales two columns references of string data and returns the XOR of the two columns
 
-    Runs the Xor
+    Max length of the string is 8 characters (xor as a 64 bit integer)
 
-    Returns the value as an int
-
-    Should it instead return bytes again? String? Should it handle int inputs?
-    """
-    return string_to_int(col1).bitwiseXOR(string_to_int(col2))
-
-def xor_256(col1: Union[str, F.Column], col2: Union[str, F.Column]) -> "F.Column[T.LongType()]":
-    """
-    Currently takes two columns (string or reference) of string/bytes
-
-    Runs the Xor
-
-    Returns the value as an int
-
-    Should it instead return bytes again? String? Should it handle int inputs?
+    Returns an integer representation of the bitwise XOR of the two columns
     """
     return string_to_int(col1).bitwiseXOR(string_to_int(col2))
+
+
+def xor(
+    col1: Union[str, F.Column], col2: Union[str, F.Column], bit_width: int = 256
+) -> "F.Column[T.StringType()]":
+
+    max_len = bit_width // 8  # 8 bits in a byte, each character is 1 byte
+    padded_col1 = F.lpad(col1, max_len, "0")  # Left-pad col1 with '0' up to max_len
+    padded_col2 = F.lpad(col2, max_len, "0")  # Left-pad col2 with '0' up to max_len
+
+    chunks = []
+    for i in range(0, max_len, 8):
+        c1_chunk = F.substring(padded_col1, i + 1, 8)
+        c2_chunk = F.substring(padded_col2, i + 1, 8)
+
+        # XOR the two chunks
+        xor_chunk = xor_word(c1_chunk, c2_chunk)
+
+        # Convert XOR result to hexadecimal and pad it
+        xor_hex_padded = F.lpad(F.hex(xor_chunk), 16, "0")
+        chunks.append(xor_hex_padded)
+
+    return F.concat(*chunks)
