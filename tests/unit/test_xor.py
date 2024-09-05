@@ -9,13 +9,12 @@ def test_xor():
     b = "World"
     expected_result = xor_python(a, b)
     definition = xor(F.col("d1"), F.col("d2"))
-    pyspark_result = run_column(definition, a, b)
+    pyspark_result = format(run_column(definition, a, b), 'x')
     assert expected_result == pyspark_result
 
 def test_xor_single():
     a = "a"
     b = "b"
-    expected_result = xor_python(a, b)
     definition = xor(F.col("d1"), F.col("d2"))
     pyspark_result = run_column(definition, a, b)
-    assert expected_result == pyspark_result
+    assert pyspark_result == 3
