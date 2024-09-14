@@ -21,6 +21,15 @@ def test_xor_single():
     assert pyspark_result == 3
 
 
+def test_xor_empty_byte_string():
+    a = b"\x00" * 8
+    b = b"\x36" * 8
+    expected_result = xor_python(a, b)
+    definition = xor_word(F.col("d1"), F.col("d2"))
+    pyspark_result = run_column(definition, a, b)
+    assert int(expected_result, 16) == pyspark_result
+
+
 def test_xor_bytes():
     a = b"\x00a"
     b = b"\x00b"
