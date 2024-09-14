@@ -1,12 +1,13 @@
 from typing import Union
 
 import pyspark.sql.functions as F
-import pyspark.sql.types as T
 
-from pyspark_utils.helpers import ByteColumn, HexStringColumn, LongColumn, string_to_int
+from pyspark_utils.helpers import ByteColumn, LongColumn, StringColumn, chars_to_int
 
 
-def xor_word(col1: Union[str, F.Column], col2: Union[str, F.Column]) -> LongColumn:
+def xor_word(
+    col1: Union[ByteColumn, StringColumn], col2: Union[ByteColumn, StringColumn]
+) -> LongColumn:
     """
     Tales two columns references of string data and returns the XOR of the two columns
 
@@ -14,7 +15,7 @@ def xor_word(col1: Union[str, F.Column], col2: Union[str, F.Column]) -> LongColu
 
     Returns an integer representation of the bitwise XOR of the two columns
     """
-    return string_to_int(col1).bitwiseXOR(string_to_int(col2))
+    return chars_to_int(col1).bitwiseXOR(chars_to_int(col2))
 
 
 def xor(col1: ByteColumn, col2: ByteColumn, byte_width: int = 64) -> ByteColumn:

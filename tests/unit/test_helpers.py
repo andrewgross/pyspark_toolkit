@@ -2,7 +2,7 @@ import pyspark.sql.functions as F
 import pyspark.sql.types as T
 from pyspark.sql import SparkSession
 
-from pyspark_utils.helpers import pad_key, sha2_binary, string_to_int
+from pyspark_utils.helpers import chars_to_int, pad_key, sha2_binary
 from tests.helpers import run_column
 
 
@@ -12,7 +12,7 @@ def test_string_to_int():
     """
     a = "Hello"
     # int.from_bytes(a.encode("utf-8"), "big")
-    definition = string_to_int(F.col("d1"))
+    definition = chars_to_int(F.col("d1"))
     pyspark_result = run_column(definition, a, "")
     assert pyspark_result == 310939249775
 
@@ -23,7 +23,7 @@ def test_string_to_int_with_bytes():
     """
     a = b"Hello"
     # int.from_bytes(a.encode("utf-8"), "big")
-    definition = string_to_int(F.col("d1"))
+    definition = chars_to_int(F.col("d1"))
     pyspark_result = run_column(definition, a, "")
     assert pyspark_result == 310939249775
 
@@ -36,7 +36,7 @@ def test_string_to_int_types():
     data = [(a)]
     spark = SparkSession.builder.getOrCreate()
     df = spark.createDataFrame(data, T.StringType())
-    df = df.withColumn("result", string_to_int(F.col("value")))
+    df = df.withColumn("result", chars_to_int(F.col("value")))
     assert dict(df.dtypes)["result"] == "bigint"
 
 

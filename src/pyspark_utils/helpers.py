@@ -10,7 +10,7 @@ StringColumn = NewType("StringColumn", Column)
 HexStringColumn = NewType("HexStringColumn", Column)
 
 
-def string_to_int(col: StringColumn) -> LongColumn:
+def chars_to_int(col: StringColumn) -> LongColumn:
     """
     Take a string, encode it as utf-8, and convert those bytes to a bigint
 

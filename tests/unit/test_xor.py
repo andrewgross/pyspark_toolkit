@@ -21,6 +21,14 @@ def test_xor_single():
     assert pyspark_result == 3
 
 
+def test_xor_bytes():
+    a = b"\x00a"
+    b = b"\x00b"
+    definition = xor_word(F.col("d1"), F.col("d2"))
+    pyspark_result = run_column(definition, a, b)
+    assert pyspark_result == 3
+
+
 def test_xor_128():
     a = b"1111111122222222"
     b = b"4444444433333333"
