@@ -55,3 +55,14 @@ def test_xor_256():
     definition = xor(F.col("d1"), F.col("d2"), byte_width=32)
     pyspark_result = bytes(run_column(definition, a, b)).hex()
     assert expected_result == pyspark_result
+
+
+def test_xor_hashed_key():
+    # Gotta fix this test, something is going sideways in our XOR
+    block_size = 64
+    a = b"\xd1|\xa7\x95\x17\xb1\xe2\x18\x99\xb6\xe9\xda<O/3@\xaf\xe8\xae\xc0\r\xdb\x1f\x1a#\xa9\xd6\x9e\xd6f\xed\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+    b = b"\x36" * block_size
+    expected_result = xor_python(a, b)
+    definition = xor(F.col("d1"), F.col("d2"), byte_width=block_size)
+    pyspark_result = bytes(run_column(definition, a, b)).hex()
+    assert expected_result == pyspark_result

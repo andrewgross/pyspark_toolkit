@@ -16,10 +16,8 @@ def hmac_sha256(key: ByteColumn, message: ByteColumn) -> ByteColumn:
     block_size = 64
 
     prepared_key = _prepare_key(key, block_size)
-    # Create the inner and outer padding - Something weird happening here
-    # When our Key is over 64 bits, our XOR comes back null for some reason
-    # but it works for shorter keys. We are seeing 32 bits of hex for the hashed key,
-    # padded to 64, vs 32bits of integer, padded to 64 for the raw key, something weird about our conversion
+
+    # Create the inner and outer padding
     i_key_pad = xor(prepared_key, F.lit(b"\x36" * block_size))
     o_key_pad = xor(prepared_key, F.lit(b"\x5C" * block_size))
 
