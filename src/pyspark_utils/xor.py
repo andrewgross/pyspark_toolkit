@@ -18,7 +18,7 @@ def xor_word(col1: Union[str, F.Column], col2: Union[str, F.Column]) -> LongColu
 
 
 def xor(col1: ByteColumn, col2: ByteColumn, byte_width: int = 64) -> HexStringColumn:
-
+    
     padded_col1 = F.lpad(
         col1, byte_width, b"\x00"
     )  # Left-pad col1 with '0' up to max_len
