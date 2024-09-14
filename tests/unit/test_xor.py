@@ -26,17 +26,17 @@ def test_xor_128():
     b = b"4444444433333333"
     expected_result = xor_python(a, b)
     definition = xor(F.col("d1"), F.col("d2"), byte_width=16)
-    pyspark_result = run_column(definition, a, b)
+    pyspark_result = bytes(run_column(definition, a, b)).hex()
     assert expected_result == pyspark_result
 
 
-def test_xor_odd_width():
+def test_xor_odd_width_inputs():
     a = b"111111112222222"
     b = b"444444443333333"
     byte_width = 16
     expected_result = xor_python(a, b, byte_width=byte_width)
     definition = xor(F.col("d1"), F.col("d2"), byte_width=byte_width)
-    pyspark_result = run_column(definition, a, b)
+    pyspark_result = bytes(run_column(definition, a, b)).hex()
     assert expected_result == pyspark_result
 
 
@@ -45,5 +45,5 @@ def test_xor_256():
     b = b"44444444333333332222222211111111"
     expected_result = xor_python(a, b)
     definition = xor(F.col("d1"), F.col("d2"), byte_width=32)
-    pyspark_result = run_column(definition, a, b)
+    pyspark_result = bytes(run_column(definition, a, b)).hex()
     assert expected_result == pyspark_result

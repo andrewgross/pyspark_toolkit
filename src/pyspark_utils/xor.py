@@ -17,14 +17,14 @@ def xor_word(col1: Union[str, F.Column], col2: Union[str, F.Column]) -> LongColu
     return string_to_int(col1).bitwiseXOR(string_to_int(col2))
 
 
-def xor(col1: ByteColumn, col2: ByteColumn, byte_width: int = 64) -> HexStringColumn:
-    
+def xor(col1: ByteColumn, col2: ByteColumn, byte_width: int = 64) -> ByteColumn:
+
     padded_col1 = F.lpad(
         col1, byte_width, b"\x00"
-    )  # Left-pad col1 with '0' up to max_len
+    )  # Left-pad col1 with '0' up to byte_width
     padded_col2 = F.lpad(
         col2, byte_width, b"\x00"
-    )  # Left-pad col2 with '0' up to max_len
+    )  # Left-pad col2 with '0' up to byte_width
 
     chunks = []
     for i in range(0, byte_width, 8):
@@ -40,4 +40,4 @@ def xor(col1: ByteColumn, col2: ByteColumn, byte_width: int = 64) -> HexStringCo
         )  # We want string 0, not byte 0 here because it is hex
         chunks.append(xor_hex_padded)
 
-    return F.concat(*chunks)
+    return F.to_binary(F.concat(*chunks), F.lit("hex"))

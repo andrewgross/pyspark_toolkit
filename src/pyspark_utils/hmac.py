@@ -20,8 +20,8 @@ def hmac_sha256(key: ByteColumn, message: ByteColumn) -> ByteColumn:
     # When our Key is over 64 bits, our XOR comes back null for some reason
     # but it works for shorter keys. We are seeing 32 bits of hex for the hashed key,
     # padded to 64, vs 32bits of integer, padded to 64 for the raw key, something weird about our conversion
-    i_key_pad = F.to_binary(xor(prepared_key, F.lit(b"\x36" * block_size)))
-    o_key_pad = F.to_binary(xor(prepared_key, F.lit(b"\x5C" * block_size)))
+    i_key_pad = xor(prepared_key, F.lit(b"\x36" * block_size))
+    o_key_pad = xor(prepared_key, F.lit(b"\x5C" * block_size))
 
     # Perform inner hash
     inner_hash = sha2_binary(F.concat(i_key_pad, message), 256)
