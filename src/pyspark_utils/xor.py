@@ -3,12 +3,7 @@ from typing import Union
 import pyspark.sql.functions as F
 import pyspark.sql.types as T
 
-from pyspark_utils.helpers import (
-    HexStringColumn,
-    LongColumn,
-    StringColumn,
-    string_to_int,
-)
+from pyspark_utils.helpers import ByteColumn, HexStringColumn, LongColumn, string_to_int
 
 
 def xor_word(col1: Union[str, F.Column], col2: Union[str, F.Column]) -> LongColumn:
@@ -22,16 +17,13 @@ def xor_word(col1: Union[str, F.Column], col2: Union[str, F.Column]) -> LongColu
     return string_to_int(col1).bitwiseXOR(string_to_int(col2))
 
 
-def xor(
-    col1: StringColumn, col2: StringColumn, bit_width: int = 512
-) -> HexStringColumn:
+def xor(col1: ByteColumn, col2: ByteColumn, byte_width: int = 64) -> HexStringColumn:
 
-    max_len = bit_width // 8  # 8 bits in a byte, each character is 1 byte
-    padded_col1 = F.lpad(col1, max_len, "0")  # Left-pad col1 with '0' up to max_len
-    padded_col2 = F.lpad(col2, max_len, "0")  # Left-pad col2 with '0' up to max_len
+    padded_col1 = F.lpad(col1, byte_width, "0")  # Left-pad col1 with '0' up to max_len
+    padded_col2 = F.lpad(col2, byte_width, "0")  # Left-pad col2 with '0' up to max_len
 
     chunks = []
-    for i in range(0, max_len, 8):
+    for i in range(0, byte_width, 8):
         c1_chunk = F.substring(padded_col1, i + 1, 8)
         c2_chunk = F.substring(padded_col2, i + 1, 8)
 
