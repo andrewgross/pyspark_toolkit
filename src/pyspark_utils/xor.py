@@ -23,7 +23,7 @@ def xor_word(col1: Union[str, F.Column], col2: Union[str, F.Column]) -> LongColu
 
 
 def xor(
-    col1: StringColumn, col2: StringColumn, bit_width: int = 256
+    col1: StringColumn, col2: StringColumn, bit_width: int = 512
 ) -> HexStringColumn:
 
     max_len = bit_width // 8  # 8 bits in a byte, each character is 1 byte
