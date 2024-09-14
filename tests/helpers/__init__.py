@@ -19,9 +19,12 @@ def run_column(column_definition, d1, d2):
     return df.collect()[0]["result"]
 
 
-def xor_python(d1: str, d2: str):
+def xor_python(d1: str, d2: str, byte_width=None):
     result = bytearray([a ^ b for a, b in zip(d1, d2)])
-    return result.hex()
+    hex_result = result.hex()
+    if byte_width is not None:
+        return hex_result.zfill(byte_width * 2)
+    return hex_result
 
 
 def hmac_python(

@@ -30,6 +30,16 @@ def test_xor_128():
     assert expected_result == pyspark_result
 
 
+def test_xor_odd_width():
+    a = b"111111112222222"
+    b = b"444444443333333"
+    byte_width = 16
+    expected_result = xor_python(a, b, byte_width=byte_width)
+    definition = xor(F.col("d1"), F.col("d2"), byte_width=byte_width)
+    pyspark_result = run_column(definition, a, b)
+    assert expected_result == pyspark_result
+
+
 def test_xor_256():
     a = b"11111111222222223333333344444444"
     b = b"44444444333333332222222211111111"
