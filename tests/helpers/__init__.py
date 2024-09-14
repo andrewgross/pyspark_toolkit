@@ -1,3 +1,7 @@
+import hashlib
+import hmac
+from typing import Union
+
 from pyspark.sql import SparkSession
 
 
@@ -20,3 +24,17 @@ def xor_python(d1: str, d2: str):
     b2 = bytes(d2, "utf-8")
     result = bytearray([a ^ b for a, b in zip(b1, b2)])
     return result.hex()
+
+
+def hmac_python(
+    key: Union[str, bytes], message: Union[str, bytes], digest=hashlib.sha256
+) -> str:
+    if isinstance(key, str):
+        b1 = bytes(key, "utf-8")
+    else:
+        b1 = key
+    if isinstance(message, str):
+        b2 = bytes(message, "utf-8")
+    else:
+        b2 = message
+    return hmac.new(key, message, digest).hexdigest()

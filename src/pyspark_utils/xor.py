@@ -1,14 +1,17 @@
 from typing import Union
 
-from pyspark.sql import functions as F
-from pyspark.sql import types as T
+import pyspark.sql.functions as F
+import pyspark.sql.types as T
 
-from pyspark_utils.helpers import string_to_int
+from pyspark_utils.helpers import (
+    HexStringColumn,
+    LongColumn,
+    StringColumn,
+    string_to_int,
+)
 
 
-def xor_word(
-    col1: Union[str, F.Column], col2: Union[str, F.Column]
-) -> "F.Column[T.LongType()]":
+def xor_word(col1: Union[str, F.Column], col2: Union[str, F.Column]) -> LongColumn:
     """
     Tales two columns references of string data and returns the XOR of the two columns
 
@@ -20,8 +23,8 @@ def xor_word(
 
 
 def xor(
-    col1: Union[str, F.Column], col2: Union[str, F.Column], bit_width: int = 256
-) -> "F.Column[T.StringType()]":
+    col1: StringColumn, col2: StringColumn, bit_width: int = 256
+) -> HexStringColumn:
 
     max_len = bit_width // 8  # 8 bits in a byte, each character is 1 byte
     padded_col1 = F.lpad(col1, max_len, "0")  # Left-pad col1 with '0' up to max_len
@@ -36,7 +39,9 @@ def xor(
         xor_chunk = xor_word(c1_chunk, c2_chunk)
 
         # Convert XOR result to hexadecimal and pad it
-        xor_hex_padded = F.lpad(F.hex(xor_chunk), 16, "0")
+        xor_hex_padded = F.lpad(
+            F.hex(xor_chunk), 16, "0"
+        )  # We want string 0, not byte 0 here because it is hex
         chunks.append(xor_hex_padded)
 
     return F.concat(*chunks)
