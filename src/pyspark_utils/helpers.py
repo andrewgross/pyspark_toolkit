@@ -3,8 +3,9 @@ from typing import NewType
 import pyspark.sql.functions as F
 from pyspark.sql import Column
 
-BooleanColumn = NewType("LongColumn", Column)
+BooleanColumn = NewType("BooleanColumn", Column)
 ByteColumn = NewType("ByteColumn", Column)
+IntegerColumn = NewType("IntegerColumn", Column)
 LongColumn = NewType("LongColumn", Column)
 StringColumn = NewType("StringColumn", Column)
 HexStringColumn = NewType("HexStringColumn", Column)
