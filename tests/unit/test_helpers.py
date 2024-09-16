@@ -6,9 +6,9 @@ from pyspark_utils.helpers import chars_to_int, pad_key, sha2_binary
 from tests.helpers import run_column
 
 
-def test_string_to_int():
+def test_chars_to_int():
     """
-    string_to_int should convert a string to an integer
+    chars_to_int should convert a string to an integer
     """
     a = "Hello"
     # int.from_bytes(a.encode("utf-8"), "big")
@@ -17,15 +17,35 @@ def test_string_to_int():
     assert pyspark_result == 310939249775
 
 
-def test_string_to_int_with_bytes():
+def test_chars_to_int_with_bytes():
     """
-    string_to_int should convert a bytes object to an integer
+    chars_to_int should convert a bytes object to an integer
     """
     a = b"Hello"
     # int.from_bytes(a.encode("utf-8"), "big")
     definition = chars_to_int(F.col("d1"))
     pyspark_result = run_column(definition, a, "")
     assert pyspark_result == 310939249775
+
+
+def test_chars_to_int_with_unprintable_characters():
+    """
+    chars_to_int should convert a bytes object to an integer
+    """
+    a = b"\x00\x00\x00\x00\x00\x00\x00\x00"
+    definition = chars_to_int(F.col("d1"))
+    pyspark_result = run_column(definition, a, "")
+    assert pyspark_result == 0
+
+
+def test_chars_to_int_hex_bytes_overflow():
+    """
+    chars_to_int should return None if the input is too large
+    """
+    a = b"\xFF" * 8
+    definition = chars_to_int(F.col("d1"))
+    pyspark_result = run_column(definition, a, "")
+    assert pyspark_result == None
 
 
 def test_string_to_int_types():

@@ -16,7 +16,7 @@ def chars_to_int(col: StringColumn) -> LongColumn:
 
     Currently blows up if our string is too big
     """
-    return F.conv(F.hex(F.to_binary(col, F.lit("utf-8"))), 16, 10).cast("bigint")
+    return F.conv(F.hex(col), 16, 10).cast("bigint")
 
 
 def pad_key(key: ByteColumn, block_size: int) -> ByteColumn:

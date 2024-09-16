@@ -9,6 +9,26 @@ from tests.helpers import hmac_python
 
 
 def test_hmac_short_key():
+    """
+    Test that we can compute an HMAC with a short (<64 bits) key
+    """
+    key = b"e179017a-62b0-4996-8a38-e91aa9f1e179017a-62b0-4996-8aaaaaaaaaaa"
+    message = b"foobar"
+    data = [
+        (key, message),
+    ]
+    columns = ["key", "message"]
+    spark = SparkSession.builder.getOrCreate()
+    df = spark.createDataFrame(data, columns)
+    df = df.withColumn("hmac", hmac_sha256(F.col("key"), F.col("message")))
+    expected_result = hmac_python(key, message)
+    assert expected_result == bytes(df.collect()[0]["hmac"]).hex()
+
+
+def test_hmac_boundary_key():
+    """
+    Test that we can compute an HMAC with a boundary (=64 bits) key
+    """
     key = b"e179017a-62b0-4996-8a38-e91aa9f1e179017a-62b0-4996-8aaaaaaaaaaaa"
     message = b"foobar"
     data = [
@@ -23,6 +43,9 @@ def test_hmac_short_key():
 
 
 def test_hmac_long_key():
+    """
+    Test that we can compute the HMAC of a message with a long (>64 bits) key
+    """
     key = b"e179017a-62b0-4996-8a38-e91aa9f1e179017a-62b0-4996-8aaaaaaaaaaaaaaaaaaaaaa"
     message = b"foobar"
     data = [
