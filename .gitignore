@@ -15,4 +15,5 @@ htmlcov/*
 .vscode
 bin/
 lib/
+share/
 pyvenv.cfg
