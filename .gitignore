@@ -13,3 +13,6 @@ htmlcov/*
 *~
 *#
 .vscode
+bin/
+lib/
+pyvenv.cfg
