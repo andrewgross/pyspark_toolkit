@@ -6,7 +6,7 @@ import pyspark.sql.functions as F
 import pyspark.sql.types as T
 import pytest
 
-from pyspark_utils.json_functions import (
+from pyspark_utils.json import (
     clean_dataframe_with_separate_line_item_lists,
     clean_dataframe_with_single_line_item_list,
     explode_all_list_columns,

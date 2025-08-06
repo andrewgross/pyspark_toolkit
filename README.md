@@ -13,7 +13,7 @@ pip install pyspark-utils
 ```python
 import pyspark.sql.functions as F
 from pyspark_utils.uuid import uuid5
-from pyspark_utils.json_functions import map_json_column
+from pyspark_utils.json import map_json_column
 from pyspark_utils.modulus import filter_uuid_for_modulus_and_offset
 from pyspark_utils.xor import xor
 
@@ -53,7 +53,7 @@ df = df.withColumn("uuid_nullsafe", uuid5("first", "last", null_placeholder="MIS
 Parse and extract JSON data from string columns:
 
 ```python
-from pyspark_utils.json_functions import map_json_column, extract_json_keys_as_columns
+from pyspark_utils.json import map_json_column, extract_json_keys_as_columns
 
 # Parse JSON string to structured column
 df = spark.createDataFrame([
