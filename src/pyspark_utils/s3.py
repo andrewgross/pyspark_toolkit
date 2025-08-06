@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from pyspark.sql import functions as F
-from pyspark_utils.helpers import ByteColumn
-from pyspark_utils.helpers import IntegerColumn
-from pyspark_utils.helpers import StringColumn
+
+from pyspark_utils.helpers import ByteColumn, IntegerColumn, StringColumn
 from pyspark_utils.hmac import hmac_sha256
 
 
@@ -34,67 +33,70 @@ def generate_presigned_url(
 
     # Step 2: Generate formatted date strings (amz_date and date_stamp)
     amz_date = F.date_format(now, "yyyyMMdd'T'HHmmss'Z'")
-    date_stamp = F.date_format(now, 'yyyyMMdd')
+    date_stamp = F.date_format(now, "yyyyMMdd")
 
     # Step 3: Create the canonical URI and host
-    canonical_uri = F.concat(F.lit('/'), F.lit(key))
-    host = F.concat(bucket, F.lit('.s3.'), region, F.lit('.amazonaws.com'))
-    endpoint = F.concat(F.lit('https://'), host, canonical_uri)
+    canonical_uri = F.concat(F.lit("/"), F.lit(key))
+    host = F.concat(bucket, F.lit(".s3."), region, F.lit(".amazonaws.com"))
+    endpoint = F.concat(F.lit("https://"), host, canonical_uri)
 
     # Step 4: Build the canonical query string
     canonical_querystring = F.concat(
-        F.lit('X-Amz-Algorithm=AWS4-HMAC-SHA256'),
-        F.lit('&X-Amz-Credential='),
+        F.lit("X-Amz-Algorithm=AWS4-HMAC-SHA256"),
+        F.lit("&X-Amz-Credential="),
         F.lit(aws_access_key),
-        F.lit('/'),
+        F.lit("/"),
         date_stamp,
-        F.lit('/'),
+        F.lit("/"),
         F.lit(region),
-        F.lit('/s3/aws4_request'),
-        F.lit('&X-Amz-Date='),
+        F.lit("/s3/aws4_request"),
+        F.lit("&X-Amz-Date="),
         amz_date,
-        F.lit('&X-Amz-Expires='),
+        F.lit("&X-Amz-Expires="),
         F.lit(str(expiration)),
-        F.lit('&X-Amz-SignedHeaders=host'),
+        F.lit("&X-Amz-SignedHeaders=host"),
     )
 
     # Step 5: Create the canonical headers and signed headers
-    canonical_headers = F.concat(F.lit('host:'), host, F.lit('\n'))
-    signed_headers = F.lit('host')
+    canonical_headers = F.concat(F.lit("host:"), host, F.lit("\n"))
+    signed_headers = F.lit("host")
 
     # Step 6: Set payload hash (we'll use 'UNSIGNED-PAYLOAD' as per S3 requirements for GET requests)
-    payload_hash = F.lit('UNSIGNED-PAYLOAD')
+    payload_hash = F.lit("UNSIGNED-PAYLOAD")
 
     # Step 7: Build the canonical request
     canonical_request = F.concat(
-        F.lit('GET\n'),
+        F.lit("GET\n"),
         canonical_uri,
-        F.lit('\n'),
+        F.lit("\n"),
         canonical_querystring,
-        F.lit('\n'),
+        F.lit("\n"),
         canonical_headers,
-        F.lit('\n'),
+        F.lit("\n"),
         signed_headers,
-        F.lit('\n'),
+        F.lit("\n"),
         payload_hash,
     )
 
     # Step 8: Create the string to sign
     credential_scope = F.concat(
-        date_stamp, F.lit('/'), region, F.lit('/s3/aws4_request'),
+        date_stamp,
+        F.lit("/"),
+        region,
+        F.lit("/s3/aws4_request"),
     )
 
     string_to_sign = F.concat(
-        F.lit('AWS4-HMAC-SHA256\n'),
+        F.lit("AWS4-HMAC-SHA256\n"),
         amz_date,
-        F.lit('\n'),
+        F.lit("\n"),
         credential_scope,
-        F.lit('\n'),
+        F.lit("\n"),
         F.sha2(canonical_request, 256),
     )
 
     # Step 9: Generate the signing key
-    signing_key = _get_signature_key(aws_secret_key, date_stamp, region, 's3')
+    signing_key = _get_signature_key(aws_secret_key, date_stamp, region, "s3")
 
     # Step 10: Call hmac_256 function to generate the signature
     signature = hmac_sha256(signing_key, string_to_sign)
@@ -102,9 +104,9 @@ def generate_presigned_url(
     # Step 11: Build the final signed URL
     signed_url = F.concat(
         endpoint,
-        F.lit('?'),
+        F.lit("?"),
         canonical_querystring,
-        F.lit('&X-Amz-Signature='),
+        F.lit("&X-Amz-Signature="),
         signature,
     )
 
@@ -113,11 +115,11 @@ def generate_presigned_url(
 
 def _get_signature_key(aws_secret_key, date_stamp, region, service):
     key_prefix = F.concat(
-        F.lit('AWS4'),
+        F.lit("AWS4"),
         aws_secret_key,
     )
     k_date = hmac_sha256(key_prefix, date_stamp)
     k_region = hmac_sha256(k_date, region)
     k_service = hmac_sha256(k_region, service)
-    signing_key = hmac_sha256(k_service, F.lit('aws4_request'))
+    signing_key = hmac_sha256(k_service, F.lit("aws4_request"))
     return signing_key

@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.9.0"
 
 dependencies = [
-    "pyspark<4.0.0",
+    "pyspark",
 ]
 
 [dependency-groups]
