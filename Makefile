@@ -26,6 +26,9 @@ format:
 test:
 	uv run pytest tests/ -v
 
+test-debug:
+	uv run pytest tests/ -v --durations=10 --pdb
+
 test-reset: clean test
 
 build: clean
