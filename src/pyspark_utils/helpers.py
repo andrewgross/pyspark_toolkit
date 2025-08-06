@@ -29,7 +29,7 @@ def chars_to_int(col: ByteColumn | StringColumn) -> LongColumn:
 
 
 def pad_key(key: ByteColumn, block_size: int) -> ByteColumn:
-    return ByteColumn(F.rpad(key, block_size, bytes([0])))
+    return ByteColumn(F.rpad(key, block_size, bytes([0])))  # type: ignore (we need to pass bytes to rpad)
 
 
 def sha2_binary(col: ByteColumn, num_bits: int) -> ByteColumn:

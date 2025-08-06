@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pyspark.sql import functions as F
 
-from pyspark_utils.helpers import ByteColumn, IntegerColumn, StringColumn
 from pyspark_utils.hmac import hmac_sha256
+from pyspark_utils.types import ByteColumn, IntegerColumn, StringColumn
 
 
 def generate_presigned_url(
@@ -99,7 +99,7 @@ def generate_presigned_url(
     signing_key = _get_signature_key(aws_secret_key, date_stamp, region, "s3")
 
     # Step 10: Call hmac_256 function to generate the signature
-    signature = hmac_sha256(signing_key, string_to_sign)
+    signature = hmac_sha256(ByteColumn(signing_key), ByteColumn(string_to_sign))
 
     # Step 11: Build the final signed URL
     signed_url = F.concat(
@@ -110,7 +110,7 @@ def generate_presigned_url(
         signature,
     )
 
-    return signed_url
+    return StringColumn(signed_url)
 
 
 def _get_signature_key(aws_secret_key, date_stamp, region, service):
@@ -118,8 +118,8 @@ def _get_signature_key(aws_secret_key, date_stamp, region, service):
         F.lit("AWS4"),
         aws_secret_key,
     )
-    k_date = hmac_sha256(key_prefix, date_stamp)
+    k_date = hmac_sha256(ByteColumn(key_prefix), ByteColumn(date_stamp))
     k_region = hmac_sha256(k_date, region)
     k_service = hmac_sha256(k_region, service)
-    signing_key = hmac_sha256(k_service, F.lit("aws4_request"))
+    signing_key = hmac_sha256(ByteColumn(k_service), ByteColumn(F.lit("aws4_request")))
     return signing_key

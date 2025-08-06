@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from typing import Annotated
+
 import pyspark.sql.functions as F
+from pyspark.sql import Column
 
 from pyspark_utils.helpers import chars_to_int
 from pyspark_utils.types import ByteColumn, LongColumn, StringColumn
@@ -20,7 +23,11 @@ def xor_word(
     return LongColumn(chars_to_int(col1).bitwiseXOR(chars_to_int(col2)))
 
 
-def xor(col1: ByteColumn, col2: ByteColumn, byte_width: int = 64) -> ByteColumn:
+def xor(
+    col1: Annotated[Column, "First ByteColumn to XOR"],
+    col2: Annotated[Column, "Second ByteColumn to XOR"],
+    byte_width: int = 64,
+) -> Annotated[Column, "XOR of the two columns, as ByteColumn"]:
     # Use 4 bytes (32 bits) as the word width
     # since we are XORing using 64 bit *signed* integers
     # so we cant use the full width without overflow (NULL in pyspark)
@@ -28,12 +35,12 @@ def xor(col1: ByteColumn, col2: ByteColumn, byte_width: int = 64) -> ByteColumn:
     padded_col1 = F.lpad(
         col1,
         byte_width,
-        b"\x00",
+        b"\x00",  # type: ignore (we need to pass bytes to rpad)
     )  # Left-pad col1 with '0' up to byte_width
     padded_col2 = F.lpad(
         col2,
         byte_width,
-        b"\x00",
+        b"\x00",  # type: ignore (we need to pass bytes to lpad)
     )  # Left-pad col2 with '0' up to byte_width
 
     chunks = []
@@ -42,7 +49,7 @@ def xor(col1: ByteColumn, col2: ByteColumn, byte_width: int = 64) -> ByteColumn:
         c2_chunk = F.substring(padded_col2, i + 1, word_width)
 
         # XOR the two chunks
-        xor_chunk = xor_word(c1_chunk, c2_chunk)
+        xor_chunk = xor_word(ByteColumn(c1_chunk), ByteColumn(c2_chunk))
 
         # Convert XOR result to hexadecimal and pad it
         xor_hex_padded = F.lpad(

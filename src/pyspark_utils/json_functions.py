@@ -1,7 +1,7 @@
 import pyspark
 import pyspark.sql.functions as F
 from pyspark.sql import DataFrame
-from pyspark.sql.types import ArrayType
+from pyspark.sql.types import ArrayType, MapType, StructType
 
 
 def map_json_column(df: DataFrame, column: str, drop=True) -> DataFrame:
@@ -13,7 +13,10 @@ def map_json_column(df: DataFrame, column: str, drop=True) -> DataFrame:
     df = df.withColumnRenamed(column, raw_column)
 
     # Get first non-null JSON string to infer schema
-    sample_json = df.filter(F.col(raw_column).isNotNull()).first()[raw_column]
+    sample_row = df.filter(F.col(raw_column).isNotNull()).first()
+    if sample_row is None:
+        raise ValueError(f"No non-null JSON strings found in column '{raw_column}'")
+    sample_json = sample_row[raw_column]
 
     # Infer schema from the sample
     schema = F.schema_of_json(F.lit(sample_json))
@@ -36,14 +39,14 @@ def extract_json_keys_as_columns(df: DataFrame, json_column: str) -> DataFrame:
     # Get schema of the parsed JSON column
     schema = df.schema[json_column].dataType
 
-    if not isinstance(schema, (pyspark.sql.types.StructType, pyspark.sql.types.MapType)):
+    if not isinstance(schema, (StructType, MapType)):
         raise ValueError(f"Column '{json_column}' must be of StructType or MapType.")
 
     # Extract top-level keys as new columns
-    if isinstance(schema, pyspark.sql.types.StructType):
+    if isinstance(schema, StructType):
         for field in schema.fields:
             df = df.withColumn(field.name, F.col(f"{json_column}.{field.name}"))
-    elif isinstance(schema, pyspark.sql.types.MapType):
+    elif isinstance(schema, MapType):
         keys = df.select(F.map_keys(F.col(json_column))).rdd.flatMap(lambda x: x[0]).distinct().collect()
         for key in keys:
             df = df.withColumn(key, F.col(json_column).getItem(key))
@@ -130,7 +133,7 @@ def explode_array_of_maps(df: DataFrame, array_col: str) -> DataFrame:
 
     # Extract the keys dynamically from the schema
     map_schema = df.select(F.explode(F.col(array_col)).alias("map")).schema["map"].dataType
-    keys = [field.name for field in map_schema.fields]
+    keys = [field.name for field in map_schema.fields]  # type: ignore (map_schema is a StructType)
 
     # Select original columns, map keys, and index as the last field
     original_cols = [F.col(col) for col in df.columns if col != array_col]

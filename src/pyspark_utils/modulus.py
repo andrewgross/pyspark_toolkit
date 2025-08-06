@@ -52,9 +52,9 @@ def convert_hex_string_to_int(col: HexStringColumn) -> IntegerColumn:
     """
     Converts a hex string to an integer
 
-    NOTE: If the column is not a hex string, the result will be null or 0.
-    NOTE: If the column is not a string, the result will be null or 0.
-    NOTE: If the hex string overflows the bigint range, the result will be null or 0.
+    NOTE: If the column contains invalid hex characters, the result will be 0.
+    NOTE: If the column is null, the result will be null.
+    NOTE: If the hex string overflows the bigint range, the result will be null.
 
     Args:
         col: The column to convert. Should be a string of hex characters.
