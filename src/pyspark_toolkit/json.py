@@ -7,6 +7,13 @@ def map_json_column(df: DataFrame, column: str, drop=True) -> DataFrame:
     """
     Takes a column of JSON strings and remaps them to a Map type by
     inferring the schema from the first row.
+
+    Args:
+        df: The DataFrame to map the JSON column
+        column: The column to map
+        drop: Whether to drop the original column
+    Returns:
+        The DataFrame with the JSON column mapped to a Map type
     """
     raw_column = f"{column}_raw"
     df = df.withColumnRenamed(column, raw_column)
@@ -31,9 +38,11 @@ def extract_json_keys_as_columns(df: DataFrame, json_column: str) -> DataFrame:
     """
     Extracts each top-level key from a parsed JSON column and creates separate columns for each key.
 
-    :param df: Input PySpark DataFrame
-    :param json_column: Name of the column containing parsed JSON (as MapType or StructType)
-    :return: DataFrame with top-level keys extracted as individual columns
+    Args:
+        df: Input PySpark DataFrame
+        json_column: Name of the column containing parsed JSON (as MapType or StructType)
+    Returns:
+        DataFrame with top-level keys extracted as individual columns
     """
     # Get schema of the parsed JSON column
     schema = df.schema[json_column].dataType
@@ -63,8 +72,10 @@ def explode_all_list_columns(df: DataFrame) -> DataFrame:
     "cost": [a, b, c],
     ...
 
-    :param df: Input PySpark DataFrame
-    :return: DataFrame with exploded rows and an 'index' column
+    Args:
+        df: Input PySpark DataFrame
+    Returns:
+        DataFrame with exploded rows and an 'index' column
     """
     list_columns = [field.name for field in df.schema.fields if isinstance(field.dataType, ArrayType)]
 
@@ -86,7 +97,7 @@ def explode_all_list_columns(df: DataFrame) -> DataFrame:
     return exploded_df.drop("temp_struct", "temp_struct_exploded")
 
 
-def clean_dataframe_with_separate_line_item_lists(
+def clean_dataframe_with_separate_lists(
     df: DataFrame,
     raw_response_col: str = "raw_response",
 ) -> DataFrame:
@@ -96,8 +107,11 @@ def clean_dataframe_with_separate_line_item_lists(
     2. Extracting top-level keys as separate columns
     3. Exploding list columns into rows
 
-    :param df: Input PySpark DataFrame
-    :return: Cleaned up DataFrame
+    Args:
+        df: Input PySpark DataFrame
+        raw_response_col: The column containing the raw response
+    Returns:
+        The DataFrame with the line items exploded into separate columns
     """
     df = map_json_column(df, raw_response_col)
     df = extract_json_keys_as_columns(df, raw_response_col)
@@ -143,9 +157,9 @@ def explode_array_of_maps(df: DataFrame, array_col: str) -> DataFrame:
     )
 
 
-def clean_dataframe_with_single_line_item_list(
+def clean_dataframe_with_single_list(
     df: DataFrame,
-    line_item_col: str = "line_items",
+    list_col: str = "line_items",
     raw_response_col: str = "raw_response",
 ) -> DataFrame:
     """
@@ -154,10 +168,14 @@ def clean_dataframe_with_single_line_item_list(
     2. Extracting top-level keys as separate columns
     3. Exploding line_item column into rows
 
-    :param df: Input PySpark DataFrame
-    :return: Cleaned up DataFrame
+    Args:
+        df: Input PySpark DataFrame
+        list_col: The column containing the list
+        raw_response_col: The column containing the raw response
+    Returns:
+        The DataFrame with the line items exploded into separate columns
     """
     df = map_json_column(df, raw_response_col)
     df = extract_json_keys_as_columns(df, raw_response_col)
-    df = explode_array_of_maps(df, line_item_col)
+    df = explode_array_of_maps(df, list_col)
     return df

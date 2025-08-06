@@ -14,7 +14,7 @@ pip install pyspark-toolkit
 import pyspark.sql.functions as F
 from pyspark_toolkit.uuid import uuid5
 from pyspark_toolkit.json import map_json_column
-from pyspark_toolkit.modulus import filter_uuid_for_modulus_and_offset
+from pyspark_toolkit.modulus import partition_by_uuid
 from pyspark_toolkit.xor import xor
 
 # Your PySpark code here
@@ -78,7 +78,7 @@ df = map_json_column(df, "json_data", drop=False)
 Partition data horizontally using UUID values for distributed processing:
 
 ```python
-from pyspark_toolkit.modulus import filter_uuid_for_modulus_and_offset
+from pyspark_toolkit.modulus import partition_by_uuid
 
 # Create sample data with UUIDs
 df = spark.createDataFrame([
@@ -92,11 +92,11 @@ df = spark.createDataFrame([
 num_partitions = 4
 partitions = []
 for partition_id in range(num_partitions):
-    partition = filter_uuid_for_modulus_and_offset(
+    partition = partition_by_uuid(
         df,
         uuid_column="uuid",
-        modulus=num_partitions,
-        offset=partition_id
+        num_partitions=num_partitions,
+        partition_id=partition_id
     )
     partitions.append(partition)
 
@@ -137,11 +137,11 @@ df = df.withColumn("xor_128", xor(F.col("col1"), F.col("col2"), byte_width=128))
 - `extract_json_keys_as_columns()` - Extract JSON object keys as DataFrame columns
 - `explode_all_list_columns()` - Explode multiple array columns with matching indices
 - `explode_array_of_maps()` - Explode arrays containing map/struct objects
-- `clean_dataframe_with_separate_line_item_lists()` - Clean JSON with separate array fields
-- `clean_dataframe_with_single_line_item_list()` - Clean JSON with single array of objects
+- `clean_dataframe_with_separate_lists()` - Clean JSON with separate array fields
+- `clean_dataframe_with_single_list()` - Clean JSON with single array of objects
 
 ### Data Partitioning
-- `filter_uuid_for_modulus_and_offset()` - Partition data by UUID for horizontal scaling
+- `partition_by_uuid()` - Partition data by UUID for horizontal scaling
 - `extract_id_from_uuid()` - Extract integer ID from UUID for partitioning
 - `modulus_equals_offset()` - Check if value matches modulus/offset criteria
 

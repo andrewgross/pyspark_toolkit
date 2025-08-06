@@ -28,6 +28,20 @@ def xor(
     col2: Annotated[Column, "Second ByteColumn to XOR"],
     byte_width: int = 64,
 ) -> Annotated[Column, "XOR of the two columns, as ByteColumn"]:
+    """
+    Takes two columns references of string data and returns the XOR of the two columns
+
+    Max length of the string is 8 characters (xor as a 64 bit integer)
+
+    Returns an integer representation of the bitwise XOR of the two columns
+
+    Args:
+        col1: The first column to XOR
+        col2: The second column to XOR
+        byte_width: The number of bytes to use for the XOR
+    Returns:
+        The XOR of the two columns as a ByteColumn
+    """
     # Use 4 bytes (32 bits) as the word width
     # since we are XORing using 64 bit *signed* integers
     # so we cant use the full width without overflow (NULL in pyspark)

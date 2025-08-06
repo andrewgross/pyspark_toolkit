@@ -3,13 +3,8 @@ from typing import Annotated
 import pyspark.sql.functions as F
 from pyspark.sql import DataFrame
 
-from pyspark_toolkit.types import (
-    BooleanColumn,
-    HexStringColumn,
-    IntegerColumn,
-    StringColumn,
-    UUIDColumn,
-)
+from pyspark_toolkit.helpers import split_last_chars
+from pyspark_toolkit.types import BooleanColumn, IntegerColumn, StringColumn, UUIDColumn
 
 
 def split_uuid_string_for_id(col: UUIDColumn) -> StringColumn:
@@ -23,17 +18,6 @@ def split_uuid_string_for_id(col: UUIDColumn) -> StringColumn:
     return StringColumn(F.split(col, "-")[4])
 
 
-def split_last_chars(col: StringColumn) -> HexStringColumn:
-    """
-    Splits the last 4 characters of the column.
-    Args:
-        col: The column to split
-    Returns:
-        The last 4 characters of the column
-    """
-    return HexStringColumn(F.substring(col, -4, 4))
-
-
 def extract_id_from_uuid(col: UUIDColumn) -> IntegerColumn:
     """
     Extracts an integer ID from a UUID4 string
@@ -45,23 +29,9 @@ def extract_id_from_uuid(col: UUIDColumn) -> IntegerColumn:
     Returns:
         The integer ID from the UUID string
     """
-    return convert_hex_string_to_int(split_last_chars(split_uuid_string_for_id(col)))
-
-
-def convert_hex_string_to_int(col: HexStringColumn) -> IntegerColumn:
-    """
-    Converts a hex string to an integer
-
-    NOTE: If the column contains invalid hex characters, the result will be 0.
-    NOTE: If the column is null, the result will be null.
-    NOTE: If the hex string overflows the bigint range, the result will be null.
-
-    Args:
-        col: The column to convert. Should be a string of hex characters.
-    Returns:
-        The bigint value of the hex string as a column
-    """
-    return IntegerColumn(F.conv(col, 16, 10).cast("bigint"))
+    hex_chars = split_last_chars(split_uuid_string_for_id(col))
+    # Convert hex string directly to integer (not via chars_to_int which is for byte conversion)
+    return IntegerColumn(F.conv(hex_chars, 16, 10).cast("bigint"))
 
 
 def modulus_equals_offset(col: IntegerColumn, modulus: int, offset: int) -> BooleanColumn:
@@ -77,28 +47,39 @@ def modulus_equals_offset(col: IntegerColumn, modulus: int, offset: int) -> Bool
     return BooleanColumn(F.pmod(col, modulus) == offset)
 
 
-def filter_uuid_for_modulus_and_offset(
+def partition_by_uuid(
     df: DataFrame,
-    column_name: Annotated[str, "Name of UUID column"],
-    modulus: Annotated[int, "Number of partitions for horizontal scaling"],
-    offset: Annotated[int, "Which partition to select (0 to modulus-1)"] = 0,
+    uuid_column: Annotated[str, "Name of UUID column"],
+    num_partitions: Annotated[int, "Total number of partitions"],
+    partition_id: Annotated[int, "Which partition to select (0 to num_partitions-1)"] = 0,
 ) -> DataFrame:
     """
-    Filters the DataFrame to only include rows where the modulus of the
-    last 4 hex characters of the column is equal to the offset
+    Partition DataFrame by UUID for horizontal scaling.
+
+    Uses the last 4 hex characters of a UUID to deterministically assign rows
+    to partitions. Useful for distributing data processing across multiple
+    workers or systems.
+
     Args:
-        df: The DataFrame to filter
-        column_name: The name of the column to filter on. Expected to be a UUID4 string.
-        modulus: The modulus to check
-        offset: The offset to check
+        df: The DataFrame to partition
+        uuid_column: The name of the UUID column to partition by
+        num_partitions: Total number of partitions to split data into
+        partition_id: Which partition to return (0 to num_partitions-1)
+
     Returns:
-        The filtered DataFrame
+        DataFrame containing only rows belonging to the specified partition
+
+    Example:
+        >>> # Split data into 4 partitions for parallel processing
+        >>> for i in range(4):
+        ...     partition = partition_by_uuid(df, "uuid", 4, i)
+        ...     process_partition(partition)
     """
-    uuid_col = UUIDColumn(F.col(column_name))
+    uuid_col = UUIDColumn(F.col(uuid_column))
     return df.filter(
         modulus_equals_offset(
             extract_id_from_uuid(uuid_col),
-            modulus,
-            offset,
+            num_partitions,
+            partition_id,
         )
     )

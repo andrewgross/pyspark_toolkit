@@ -7,8 +7,8 @@ import pyspark.sql.types as T
 import pytest
 
 from pyspark_toolkit.json import (
-    clean_dataframe_with_separate_line_item_lists,
-    clean_dataframe_with_single_line_item_list,
+    clean_dataframe_with_separate_lists,
+    clean_dataframe_with_single_list,
     explode_all_list_columns,
     explode_array_of_maps,
     extract_json_keys_as_columns,
@@ -252,7 +252,7 @@ def test_explode_array_of_maps(spark):
     assert rows[1]["index"] == 1
 
 
-def test_clean_dataframe_with_separate_line_item_lists(spark):
+def test_clean_dataframe_with_separate_lists(spark):
     """
     Test end-to-end cleaning of JSON with separate array fields.
     """
@@ -270,8 +270,8 @@ def test_clean_dataframe_with_separate_line_item_lists(spark):
     ]
     df = spark.createDataFrame(data, ["invoice_id", "raw_response"])
 
-    # and I apply clean_dataframe_with_separate_line_item_lists
-    result_df = clean_dataframe_with_separate_line_item_lists(df)
+    # and I apply clean_dataframe_with_separate_lists
+    result_df = clean_dataframe_with_separate_lists(df)
 
     # then I should get a cleaned dataframe with exploded lists
     assert "customer" in result_df.columns
@@ -291,7 +291,7 @@ def test_clean_dataframe_with_separate_line_item_lists(spark):
     assert rows[0].prices == 10.0
 
 
-def test_clean_dataframe_with_single_line_item_list(spark):
+def test_clean_dataframe_with_single_list(spark):
     """
     Test end-to-end cleaning of JSON with a single array of maps.
     """
@@ -310,8 +310,8 @@ def test_clean_dataframe_with_single_line_item_list(spark):
     ]
     df = spark.createDataFrame(data, ["invoice_id", "raw_response"])
 
-    # and I apply clean_dataframe_with_single_line_item_list
-    result_df = clean_dataframe_with_single_line_item_list(df)
+    # and I apply clean_dataframe_with_single_list
+    result_df = clean_dataframe_with_single_list(df)
 
     # then I should get a cleaned dataframe with exploded line items
     assert "customer" in result_df.columns

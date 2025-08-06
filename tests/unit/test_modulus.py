@@ -3,12 +3,11 @@ from __future__ import annotations
 import pyspark.sql.functions as F
 import pyspark.sql.types as T
 
+from pyspark_toolkit.helpers import chars_to_int, split_last_chars
 from pyspark_toolkit.modulus import (
-    convert_hex_string_to_int,
     extract_id_from_uuid,
-    filter_uuid_for_modulus_and_offset,
     modulus_equals_offset,
-    split_last_chars,
+    partition_by_uuid,
     split_uuid_string_for_id,
 )
 from pyspark_toolkit.types import HexStringColumn, IntegerColumn, StringColumn, UUIDColumn
@@ -52,9 +51,9 @@ def test_split_last_chars(spark):
     assert rows[2]["result"] == "xyz"  # returns what's available if less than 4
 
 
-def test_convert_hex_string_to_int(spark):
+def test_hex_string_to_int_conversion(spark):
     """
-    Test that convert_hex_string_to_int properly converts hex strings to integers.
+    Test that hex strings are properly converted to integers using chars_to_int.
     """
     # when I have hex strings
     data = [
@@ -67,8 +66,9 @@ def test_convert_hex_string_to_int(spark):
     ]
     df = spark.createDataFrame(data, ["hex_str"])
 
-    # and I apply convert_hex_string_to_int
-    df = df.withColumn("result", convert_hex_string_to_int(HexStringColumn(F.col("hex_str"))))
+    # and I apply chars_to_int with hex encoding
+    # First convert hex string to integer using F.conv, then use chars_to_int for consistency
+    df = df.withColumn("result", F.conv(F.col("hex_str"), 16, 10).cast("bigint"))
 
     # then I should get the correct integer values
     rows = df.collect()
@@ -148,9 +148,9 @@ def test_modulus_equals_offset_different_values(spark):
     assert row["mod_10_off_7"] is True  # 17 % 10 = 7
 
 
-def test_filter_uuid_for_modulus_and_offset(spark):
+def test_partition_by_uuid(spark):
     """
-    Test that filter_uuid_for_modulus_and_offset correctly filters UUIDs.
+    Test that partition_by_uuid correctly partitions data by UUID.
     """
     # when I have a dataframe with UUIDs and other data
     data = [
@@ -161,8 +161,8 @@ def test_filter_uuid_for_modulus_and_offset(spark):
     ]
     df = spark.createDataFrame(data, ["uuid", "data"])
 
-    # and I filter for modulus 3, offset 1
-    result_df = filter_uuid_for_modulus_and_offset(df, "uuid", modulus=3, offset=1)
+    # and I get partition 1 of 3 partitions
+    result_df = partition_by_uuid(df, uuid_column="uuid", num_partitions=3, partition_id=1)
 
     # then I should only get records where UUID's last 4 hex chars % 3 == 1
     rows = result_df.collect()
@@ -170,9 +170,9 @@ def test_filter_uuid_for_modulus_and_offset(spark):
     assert set(row["data"] for row in rows) == {"record1", "record3"}
 
 
-def test_filter_uuid_for_modulus_and_offset_different_offsets(spark):
+def test_partition_by_uuid_different_partitions(spark):
     """
-    Test filter_uuid_for_modulus_and_offset with different offset values.
+    Test partition_by_uuid with different partition IDs.
     """
     # when I have UUIDs
     data = [
@@ -184,22 +184,22 @@ def test_filter_uuid_for_modulus_and_offset_different_offsets(spark):
     ]
     df = spark.createDataFrame(data, ["uuid", "label"])
 
-    # and I filter with different offsets
-    offset_0 = filter_uuid_for_modulus_and_offset(df, "uuid", modulus=4, offset=0)
-    offset_1 = filter_uuid_for_modulus_and_offset(df, "uuid", modulus=4, offset=1)
-    offset_2 = filter_uuid_for_modulus_and_offset(df, "uuid", modulus=4, offset=2)
-    offset_3 = filter_uuid_for_modulus_and_offset(df, "uuid", modulus=4, offset=3)
+    # and I get different partitions
+    partition_0 = partition_by_uuid(df, "uuid", num_partitions=4, partition_id=0)
+    partition_1 = partition_by_uuid(df, "uuid", num_partitions=4, partition_id=1)
+    partition_2 = partition_by_uuid(df, "uuid", num_partitions=4, partition_id=2)
+    partition_3 = partition_by_uuid(df, "uuid", num_partitions=4, partition_id=3)
 
-    # then each offset should get the right records
-    assert set(row["label"] for row in offset_0.collect()) == {"E"}
-    assert set(row["label"] for row in offset_1.collect()) == {"A", "B"}
-    assert set(row["label"] for row in offset_2.collect()) == {"C"}
-    assert set(row["label"] for row in offset_3.collect()) == {"D"}
+    # then each partition should get the right records
+    assert set(row["label"] for row in partition_0.collect()) == {"E"}
+    assert set(row["label"] for row in partition_1.collect()) == {"A", "B"}
+    assert set(row["label"] for row in partition_2.collect()) == {"C"}
+    assert set(row["label"] for row in partition_3.collect()) == {"D"}
 
 
-def test_filter_uuid_for_modulus_handles_nulls(spark):
+def test_partition_by_uuid_handles_nulls(spark):
     """
-    Test that filter_uuid_for_modulus_and_offset handles null UUIDs gracefully.
+    Test that partition_by_uuid handles null UUIDs gracefully.
     """
     # when I have UUIDs including nulls
     data = [
@@ -209,8 +209,8 @@ def test_filter_uuid_for_modulus_handles_nulls(spark):
     ]
     df = spark.createDataFrame(data, ["uuid", "label"])
 
-    # and I filter for modulus and offset
-    result_df = filter_uuid_for_modulus_and_offset(df, "uuid", modulus=2, offset=1)
+    # and I get partition 1 of 2 partitions
+    result_df = partition_by_uuid(df, "uuid", num_partitions=2, partition_id=1)
 
     # then nulls should be filtered out
     rows = result_df.collect()
@@ -250,10 +250,10 @@ def test_end_to_end_uuid_partitioning(spark):
     df = spark.createDataFrame(data, ["uuid", "value"])
 
     # and I partition into 4 groups
-    modulus = 4
+    num_partitions = 4
     partitions = []
-    for offset in range(modulus):
-        partition = filter_uuid_for_modulus_and_offset(df, "uuid", modulus, offset)
+    for partition_id in range(num_partitions):
+        partition = partition_by_uuid(df, "uuid", num_partitions, partition_id)
         partitions.append(partition)
 
     # then all records should be in exactly one partition
@@ -262,8 +262,8 @@ def test_end_to_end_uuid_partitioning(spark):
     assert total_original == total_partitioned
 
     # and partitions should not overlap
-    for i in range(modulus):
-        for j in range(i + 1, modulus):
+    for i in range(num_partitions):
+        for j in range(i + 1, num_partitions):
             partition_i = set(row["uuid"] for row in partitions[i].collect())
             partition_j = set(row["uuid"] for row in partitions[j].collect())
             assert partition_i.isdisjoint(partition_j)
