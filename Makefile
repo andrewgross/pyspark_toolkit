@@ -2,15 +2,16 @@
 
 help:
 	@echo "Available targets:"
-	@echo "  setup        - Install dependencies and setup pre-commit"
-	@echo "  test         - Run all tests (examples + src)"
-	@echo "  test-reset   - Clean and run tests"
-	@echo "  lint         - Run pre-commit hooks on all files"
-	@echo "  format       - Run formatting tools (ruff)"
-	@echo "  build        - Build the package"
-	@echo "  publish      - Publish the package to PyPI"
-	@echo "  clean        - Clean up temp files and build artifacts"
-	@echo "  all          - Setup and test"
+	@echo "  setup            - Install dependencies and setup pre-commit"
+	@echo "  test             - Run all tests"
+	@echo "  test-s3-isolated - Run isolated s3 hanging test (5s timeout)"
+	@echo "  test-reset       - Clean and run tests"
+	@echo "  lint             - Run pre-commit hooks on all files"
+	@echo "  format           - Run formatting tools (ruff)"
+	@echo "  build            - Build the package"
+	@echo "  publish          - Publish the package to PyPI"
+	@echo "  clean            - Clean up temp files and build artifacts"
+	@echo "  all              - Setup and test"
 
 setup:
 	uv sync --group dev
@@ -25,6 +26,10 @@ format:
 
 test:
 	uv run pytest tests/ -v
+
+test-s3-isolated:
+	@echo "Running isolated S3 signature test..."
+	@uv run python tests/run_s3_timeout_test.py
 
 test-debug:
 	uv run pytest tests/ -v --durations=10 --pdb
