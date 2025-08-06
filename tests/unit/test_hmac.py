@@ -3,70 +3,67 @@ from __future__ import annotations
 import pyspark.sql.functions as F
 import pyspark.sql.types as T
 from pyspark.sql import SparkSession
-from pyspark_utils.hmac import _prepare_key
-from pyspark_utils.hmac import hmac_sha256
 
+from pyspark_utils.hmac import _prepare_key, hmac_sha256
 from tests.helpers import hmac_python
-
-# I have gravely confused the representations of how b"0" vs b"\x00" vs bytes([0]) works
 
 
 def test_hmac_short_key():
     """
     Test that we can compute an HMAC with a short (<64 bits) key
     """
-    key = b'e179017a-62b0-4996-8a38-e91aa9f1e179017a-62b0-4996-8aaaaaaaaaaa'
-    message = b'foobar'
+    key = b"e179017a-62b0-4996-8a38-e91aa9f1e179017a-62b0-4996-8aaaaaaaaaaa"
+    message = b"foobar"
     data = [
         (key, message),
     ]
-    columns = ['key', 'message']
+    columns = ["key", "message"]
     spark = SparkSession.builder.getOrCreate()
     df = spark.createDataFrame(data, columns)
-    df = df.withColumn('hmac', hmac_sha256(F.col('key'), F.col('message')))
+    df = df.withColumn("hmac", hmac_sha256(F.col("key"), F.col("message")))
     expected_result = hmac_python(key, message)
-    assert expected_result == bytes(df.collect()[0]['hmac']).hex()
+    assert expected_result == bytes(df.collect()[0]["hmac"]).hex()
 
 
 def test_hmac_boundary_key():
     """
     Test that we can compute an HMAC with a boundary (=64 bits) key
     """
-    key = b'e179017a-62b0-4996-8a38-e91aa9f1e179017a-62b0-4996-8aaaaaaaaaaaa'
-    message = b'foobar'
+    key = b"e179017a-62b0-4996-8a38-e91aa9f1e179017a-62b0-4996-8aaaaaaaaaaaa"
+    message = b"foobar"
     data = [
         (key, message),
     ]
-    columns = ['key', 'message']
+    columns = ["key", "message"]
     spark = SparkSession.builder.getOrCreate()
     df = spark.createDataFrame(data, columns)
-    df = df.withColumn('hmac', hmac_sha256(F.col('key'), F.col('message')))
+    df = df.withColumn("hmac", hmac_sha256(F.col("key"), F.col("message")))
     expected_result = hmac_python(key, message)
-    assert expected_result == bytes(df.collect()[0]['hmac']).hex()
+    assert expected_result == bytes(df.collect()[0]["hmac"]).hex()
 
 
 def test_hmac_long_key():
     """
     Test that we can compute the HMAC of a message with a long (>64 bits) key
     """
-    key = b'e179017a-62b0-4996-8a38-e91aa9f1e179017a-62b0-4996-8aaaaaaaaaaaaaaaaaaaaaa'
-    message = b'foobar'
+    key = b"e179017a-62b0-4996-8a38-e91aa9f1e179017a-62b0-4996-8aaaaaaaaaaaaaaaaaaaaaa"
+    message = b"foobar"
     data = [
         (key, message),
     ]
-    columns = ['key', 'message']
+    columns = ["key", "message"]
     spark = SparkSession.builder.getOrCreate()
     df = spark.createDataFrame(data, columns)
-    df = df.withColumn('hmac', hmac_sha256(F.col('key'), F.col('message')))
+    df = df.withColumn("hmac", hmac_sha256(F.col("key"), F.col("message")))
     expected_result = hmac_python(key, message)
-    assert expected_result == bytes(df.collect()[0]['hmac']).hex()
+    assert expected_result == bytes(df.collect()[0]["hmac"]).hex()
 
 
 def test_prepare_short_key():
     """
     Test that we can pad a key to the correct length
     """
-    key = b'e179017a-62b0-4996-8a38-e91aa9f1e179017a-62b0-4996-8aaaaaaaaaa'
+    key = b"e179017a-62b0-4996-8a38-e91aa9f1e179017a-62b0-4996-8aaaaaaaaaa"
     assert len(key) <= 64
     block_size = 64
     data = [
@@ -75,23 +72,21 @@ def test_prepare_short_key():
     spark = SparkSession.builder.getOrCreate()
     df = spark.createDataFrame(data, T.BinaryType())
     df = df.withColumn(
-        'key',
+        "key",
         _prepare_key(
-            F.col('value'),
+            F.col("value"),
             block_size=block_size,
         ),
     )
-    expected_result = (
-        b'e179017a-62b0-4996-8a38-e91aa9f1e179017a-62b0-4996-8aaaaaaaaaa\x00\x00'
-    )
-    assert expected_result == bytes(df.collect()[0]['key'])
+    expected_result = b"e179017a-62b0-4996-8a38-e91aa9f1e179017a-62b0-4996-8aaaaaaaaaa\x00\x00"
+    assert expected_result == bytes(df.collect()[0]["key"])
 
 
 def test_prepare_long_key():
     """
     Test that we can pad a key to the correct length
     """
-    key = b'e179017a-62b0-4996-8a38-e91aa9f1e179017a-62b0-4996-8aaaaaaaaaaaaaaaaaaaa'
+    key = b"e179017a-62b0-4996-8a38-e91aa9f1e179017a-62b0-4996-8aaaaaaaaaaaaaaaaaaaa"
     assert len(key) > 64
     block_size = 64
     data = [
@@ -100,11 +95,11 @@ def test_prepare_long_key():
     spark = SparkSession.builder.getOrCreate()
     df = spark.createDataFrame(data, T.BinaryType())
     df = df.withColumn(
-        'key',
+        "key",
         _prepare_key(
-            F.col('value'),
+            F.col("value"),
             block_size=block_size,
         ),
     )
     expected_result = b"W)nY\x1a%7!\xc5\x9e\x93\xcaI\xbd\xca5@{X\xdcx\xa2\x7f\xf31E\x03\xd3>\x15;'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"  # noqa
-    assert expected_result == bytes(df.collect()[0]['key'])
+    assert expected_result == bytes(df.collect()[0]["key"])

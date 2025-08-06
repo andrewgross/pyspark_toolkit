@@ -1,17 +1,10 @@
 from __future__ import annotations
 
-from typing import NewType
-
 import pyspark
 import pyspark.sql.functions as F
 from pyspark.sql import Column
 
-BooleanColumn = NewType("BooleanColumn", Column)
-ByteColumn = NewType("ByteColumn", Column)
-IntegerColumn = NewType("IntegerColumn", Column)
-LongColumn = NewType("LongColumn", Column)
-StringColumn = NewType("StringColumn", Column)
-HexStringColumn = NewType("HexStringColumn", Column)
+from pyspark_utils.types import ByteColumn, LongColumn, StringColumn
 
 
 def safe_cast(col: Column, data_type: str) -> Column:
@@ -21,12 +14,12 @@ def safe_cast(col: Column, data_type: str) -> Column:
     pyspark_version = tuple(int(x) for x in pyspark.__version__.split(".")[:2])
 
     if pyspark_version >= (4, 0):
-        return col.try_cast(data_type)
+        return col.try_cast(data_type)  # type: ignore (pyspark 4.0+ has a try_cast)
     else:
-        return col.cast(data_type)
+        return col.cast(data_type)  # type: ignore (pyspark 3.0- has a cast)
 
 
-def chars_to_int(col: StringColumn) -> LongColumn:
+def chars_to_int(col: ByteColumn | StringColumn) -> LongColumn:
     """
     Take a string, encode it as utf-8, and convert those bytes to a bigint
 

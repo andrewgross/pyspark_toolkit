@@ -16,9 +16,13 @@ We use PyTest for all Python testing. Tests should be:
 
 ### Test Structure
 
-Tests should be readable narratives:
+Tests should be readable narratives with clear comments marking each section:
 
 def test_when_db_has_records_and_api_is_called_then_returns_expected_response():
+    """
+    Test that API returns expected response when database has records.
+    This ensures our endpoint correctly retrieves and formats data.
+    """
     # when I have a database with records
     insert_records_into_db([...])
 
@@ -31,11 +35,17 @@ def test_when_db_has_records_and_api_is_called_then_returns_expected_response():
 
 Use the pattern:
 
-- when ... (setup context)
-- and ... (perform action)
-- then ... (assert outcome)
+- Docstring: Explain what the test is doing and why (if needed)
+- Comments: Use `# when`, `# and`, `# then` to mark test sections
+- Test names should reflect behavior clearly — what you're testing, under what condition, and what the expected outcome is
 
-Test names should reflect behavior clearly — what you're testing, under what condition, and what the expected outcome is.
+### Test Focus
+
+Each test should focus on testing only one action or concern:
+
+- A single test can have multiple assertions to verify the complete state
+- But avoid testing multiple unrelated behaviors in one test
+- If you find yourself testing two different concerns, split into separate tests
 
 ### Fixtures
 

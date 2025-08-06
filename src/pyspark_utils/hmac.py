@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import pyspark.sql.functions as F
-from pyspark_utils.helpers import ByteColumn
-from pyspark_utils.helpers import pad_key
-from pyspark_utils.helpers import sha2_binary
+
+from pyspark_utils.helpers import pad_key, sha2_binary
+from pyspark_utils.types import ByteColumn
 from pyspark_utils.xor import xor
 
 
@@ -19,8 +19,8 @@ def hmac_sha256(key: ByteColumn, message: ByteColumn) -> ByteColumn:
     prepared_key = _prepare_key(key, block_size)
 
     # Create the inner and outer padding
-    i_key_pad = xor(prepared_key, F.lit(b'\x36' * block_size))
-    o_key_pad = xor(prepared_key, F.lit(b'\x5C' * block_size))
+    i_key_pad = xor(prepared_key, F.lit(b"\x36" * block_size))
+    o_key_pad = xor(prepared_key, F.lit(b"\x5c" * block_size))
 
     # Perform inner hash
     inner_hash = sha2_binary(F.concat(i_key_pad, message), 256)

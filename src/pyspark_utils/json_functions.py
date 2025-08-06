@@ -1,33 +1,31 @@
 import pyspark
 import pyspark.sql.functions as F
+from pyspark.sql import DataFrame
 from pyspark.sql.types import ArrayType
 
 
-def map_json_column(
-    df: pyspark.sql.DataFrame, column: str, drop=True
-) -> pyspark.sql.DataFrame:
+def map_json_column(df: DataFrame, column: str, drop=True) -> DataFrame:
     """
     Takes a column of JSON strings and remaps them to a Map type by
     inferring the schema from the first row.
     """
     raw_column = f"{column}_raw"
     df = df.withColumnRenamed(column, raw_column)
-    schema_df = df.withColumn(
-        "struct_schema", F.schema_of_json(F.col(raw_column))
-    ).select("struct_schema")
 
-    schema = schema_df.filter(F.col("struct_schema").isNotNull()).first()[
-        "struct_schema"
-    ]
+    # Get first non-null JSON string to infer schema
+    sample_json = df.filter(F.col(raw_column).isNotNull()).first()[raw_column]
+
+    # Infer schema from the sample
+    schema = F.schema_of_json(F.lit(sample_json))
+
+    # Parse JSON using the inferred schema
     df = df.withColumn(column, F.from_json(F.col(raw_column), schema=schema))
     if drop:
         df = df.drop(raw_column)
     return df
 
 
-def extract_json_keys_as_columns(
-    df: pyspark.sql.DataFrame, json_column: str
-) -> pyspark.sql.DataFrame:
+def extract_json_keys_as_columns(df: DataFrame, json_column: str) -> DataFrame:
     """
     Extracts each top-level key from a parsed JSON column and creates separate columns for each key.
 
@@ -38,9 +36,7 @@ def extract_json_keys_as_columns(
     # Get schema of the parsed JSON column
     schema = df.schema[json_column].dataType
 
-    if not isinstance(
-        schema, (pyspark.sql.types.StructType, pyspark.sql.types.MapType)
-    ):
+    if not isinstance(schema, (pyspark.sql.types.StructType, pyspark.sql.types.MapType)):
         raise ValueError(f"Column '{json_column}' must be of StructType or MapType.")
 
     # Extract top-level keys as new columns
@@ -48,18 +44,13 @@ def extract_json_keys_as_columns(
         for field in schema.fields:
             df = df.withColumn(field.name, F.col(f"{json_column}.{field.name}"))
     elif isinstance(schema, pyspark.sql.types.MapType):
-        keys = (
-            df.select(F.map_keys(F.col(json_column)))
-            .rdd.flatMap(lambda x: x[0])
-            .distinct()
-            .collect()
-        )
+        keys = df.select(F.map_keys(F.col(json_column))).rdd.flatMap(lambda x: x[0]).distinct().collect()
         for key in keys:
-            df = df.withColumn(key, F.col(f"{json_column}[{key}]"))
+            df = df.withColumn(key, F.col(json_column).getItem(key))
     return df
 
 
-def explode_all_list_columns(df: pyspark.sql.DataFrame) -> pyspark.sql.DataFrame:
+def explode_all_list_columns(df: DataFrame) -> DataFrame:
     """
     Explodes all columns in the DataFrame that are lists (ArrayType) into rows,
     ensuring they are exploded together. Adds an 'index' column representing the
@@ -73,11 +64,7 @@ def explode_all_list_columns(df: pyspark.sql.DataFrame) -> pyspark.sql.DataFrame
     :param df: Input PySpark DataFrame
     :return: DataFrame with exploded rows and an 'index' column
     """
-    list_columns = [
-        field.name
-        for field in df.schema.fields
-        if isinstance(field.dataType, ArrayType)
-    ]
+    list_columns = [field.name for field in df.schema.fields if isinstance(field.dataType, ArrayType)]
 
     if not list_columns:
         raise ValueError("No columns with ArrayType found in the DataFrame.")
@@ -98,9 +85,9 @@ def explode_all_list_columns(df: pyspark.sql.DataFrame) -> pyspark.sql.DataFrame
 
 
 def clean_dataframe_with_separate_line_item_lists(
-    df: pyspark.sql.DataFrame,
+    df: DataFrame,
     raw_response_col: str = "raw_response",
-) -> pyspark.sql.DataFrame:
+) -> DataFrame:
     """
     Cleans up the invoice DataFrame by:
     1. Parsing the JSON column
@@ -116,9 +103,7 @@ def clean_dataframe_with_separate_line_item_lists(
     return df
 
 
-def explode_array_of_maps(
-    df: pyspark.sql.DataFrame, array_col: str
-) -> pyspark.sql.DataFrame:
+def explode_array_of_maps(df: DataFrame, array_col: str) -> DataFrame:
     """
     Explodes an array column containing maps into separate columns.
 
@@ -141,14 +126,10 @@ def explode_array_of_maps(
         pyspark.sql.DataFrame: DataFrame with array column exploded into separate columns and rows,
             with an additional 'index' column indicating the position in the original array
     """
-    df_exploded = df.select(
-        "*", F.posexplode_outer(F.col(array_col)).alias("index", "map")
-    )
+    df_exploded = df.select("*", F.posexplode_outer(F.col(array_col)).alias("index", "map"))
 
     # Extract the keys dynamically from the schema
-    map_schema = (
-        df.select(F.explode(F.col(array_col)).alias("map")).schema["map"].dataType
-    )
+    map_schema = df.select(F.explode(F.col(array_col)).alias("map")).schema["map"].dataType
     keys = [field.name for field in map_schema.fields]
 
     # Select original columns, map keys, and index as the last field
@@ -161,10 +142,10 @@ def explode_array_of_maps(
 
 
 def clean_dataframe_with_single_line_item_list(
-    df: pyspark.sql.DataFrame,
+    df: DataFrame,
     line_item_col: str = "line_items",
     raw_response_col: str = "raw_response",
-) -> pyspark.sql.DataFrame:
+) -> DataFrame:
     """
     Cleans up the invoice DataFrame by:
     1. Parsing the JSON column
