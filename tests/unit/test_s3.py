@@ -12,7 +12,7 @@ def test_s3_module_import_warning():
     with pytest.warns(DeprecationWarning, match="s3 module is deprecated"):
         with warnings.catch_warnings():
             warnings.simplefilter("always")
-            import pyspark_utils.s3  # noqa: F401
+            import pyspark_toolkit.s3  # noqa: F401
 
 
 def test_s3_excluded_from_package():
@@ -31,9 +31,9 @@ def test_s3_excluded_from_package():
             import importlib
             import sys
 
-            if "pyspark_utils.s3" in sys.modules:
-                del sys.modules["pyspark_utils.s3"]
-            import pyspark_utils.s3  # noqa: F401
+            if "pyspark_toolkit.s3" in sys.modules:
+                del sys.modules["pyspark_toolkit.s3"]
+            import pyspark_toolkit.s3  # noqa: F401
 
 
 def test_generate_presigned_url_warns():
@@ -48,7 +48,7 @@ def test_generate_presigned_url_warns():
         warnings.simplefilter("ignore", DeprecationWarning)
         import pyspark.sql.functions as F
 
-        from pyspark_utils.s3 import generate_presigned_url
+        from pyspark_toolkit.s3 import generate_presigned_url
 
     # The function should warn when called
     with pytest.warns(RuntimeWarning, match="non-functional due to deep call graph"):

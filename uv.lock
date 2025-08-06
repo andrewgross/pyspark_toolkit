@@ -163,7 +163,7 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/2e/62/36e50d38e5fe158e97cddec983b44f9417b1e205b02320e3c463b5f802fa/pyspark-3.5.6.tar.gz", hash = "sha256:f8b1c4360e41ab398c64904fae08740503bcb6bd389457d659fa6d9f2952cc48", size = 317359167, upload-time = "2025-05-27T08:24:20.82Z" }
 
 [[package]]
-name = "pyspark-utils"
+name = "pyspark-toolkit"
 source = { editable = "." }
 dependencies = [
     { name = "pyspark" },

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pyspark.sql.functions as F
 import pyspark.sql.types as T
 
-from pyspark_utils.hmac import _prepare_key, hmac_sha256
+from pyspark_toolkit.hmac import _prepare_key, hmac_sha256
 from tests.helpers import hmac_python
 
 

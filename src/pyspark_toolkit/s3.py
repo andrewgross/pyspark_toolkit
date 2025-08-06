@@ -4,8 +4,8 @@ import warnings
 
 from pyspark.sql import functions as F
 
-from pyspark_utils.hmac import hmac_sha256
-from pyspark_utils.types import ByteColumn, IntegerColumn, StringColumn
+from pyspark_toolkit.hmac import hmac_sha256
+from pyspark_toolkit.types import ByteColumn, IntegerColumn, StringColumn
 
 warnings.warn(
     "The s3 module is deprecated and non-functional due to deep call graph issues with HMAC "

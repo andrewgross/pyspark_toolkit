@@ -3,7 +3,7 @@ from __future__ import annotations
 import pyspark.sql.functions as F
 import pyspark.sql.types as T
 
-from pyspark_utils.modulus import (
+from pyspark_toolkit.modulus import (
     convert_hex_string_to_int,
     extract_id_from_uuid,
     filter_uuid_for_modulus_and_offset,
@@ -11,7 +11,7 @@ from pyspark_utils.modulus import (
     split_last_chars,
     split_uuid_string_for_id,
 )
-from pyspark_utils.types import HexStringColumn, IntegerColumn, StringColumn, UUIDColumn
+from pyspark_toolkit.types import HexStringColumn, IntegerColumn, StringColumn, UUIDColumn
 
 
 def test_split_uuid_string_for_id(spark):

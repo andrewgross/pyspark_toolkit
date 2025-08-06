@@ -6,7 +6,7 @@ import pyspark.sql.functions as F
 import pyspark.sql.types as T
 import pytest
 
-from pyspark_utils.uuid import uuid5
+from pyspark_toolkit.uuid import uuid5
 
 
 def test_uuid5_single_column(spark):

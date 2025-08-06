@@ -1,5 +1,5 @@
 [project]
-name = "pyspark-utils"
+name = "pyspark-toolkit"
 dynamic = ["version"]
 description = "PySpark Utils"
 readme = "README.md"
@@ -37,11 +37,11 @@ package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["pyspark_utils*"]
-exclude = ["pyspark_utils.s3"]
+include = ["pyspark_toolkit*"]
+exclude = ["pyspark_toolkit.s3"]
 
 [tool.setuptools.dynamic]
-version = { attr = "pyspark_utils.__version__" }
+version = { attr = "pyspark_toolkit.__version__" }
 
 
 [[tool.uv.index]]

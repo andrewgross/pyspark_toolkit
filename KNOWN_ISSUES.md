@@ -19,7 +19,7 @@
 - Users should generate S3 presigned URLs outside of PySpark UDFs using standard AWS SDKs
 
 **Files Affected:**
-- `src/pyspark_utils/s3.py` - Contains the problematic implementation with warnings
+- `src/pyspark_toolkit/s3.py` - Contains the problematic implementation with warnings
 - `tests/unit/s3_isolated_runner.py` - Isolated test that demonstrates the hanging issue
 - `tests/run_s3_timeout_test.py` - Test runner with process isolation and timeout
 - `pyproject.toml` - Configured to exclude the s3 module from distribution

@@ -3,7 +3,7 @@ from typing import Annotated
 import pyspark.sql.functions as F
 from pyspark.sql import DataFrame
 
-from pyspark_utils.types import (
+from pyspark_toolkit.types import (
     BooleanColumn,
     HexStringColumn,
     IntegerColumn,

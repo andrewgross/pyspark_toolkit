@@ -27,7 +27,7 @@ def test_s3_signature_key():
         # Import the problematic module
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
-            from pyspark_utils.s3 import _get_signature_key
+            from pyspark_toolkit.s3 import _get_signature_key
 
         # Test data
         data = [

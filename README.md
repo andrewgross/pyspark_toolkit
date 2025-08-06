@@ -1,21 +1,21 @@
-# pyspark-utils
+# pyspark-toolkit
 
 A collection of useful PySpark utility functions for data processing, including UUID generation, JSON handling, data partitioning, and cryptographic operations.
 
 ## Installation
 
 ```bash
-pip install pyspark-utils
+pip install pyspark-toolkit
 ```
 
 ## Quick Start
 
 ```python
 import pyspark.sql.functions as F
-from pyspark_utils.uuid import uuid5
-from pyspark_utils.json import map_json_column
-from pyspark_utils.modulus import filter_uuid_for_modulus_and_offset
-from pyspark_utils.xor import xor
+from pyspark_toolkit.uuid import uuid5
+from pyspark_toolkit.json import map_json_column
+from pyspark_toolkit.modulus import filter_uuid_for_modulus_and_offset
+from pyspark_toolkit.xor import xor
 
 # Your PySpark code here
 ```
@@ -27,7 +27,7 @@ from pyspark_utils.xor import xor
 Generate deterministic UUIDs from one or more columns:
 
 ```python
-from pyspark_utils.uuid import uuid5
+from pyspark_toolkit.uuid import uuid5
 import uuid
 
 # Generate UUID5 from a single column
@@ -53,7 +53,7 @@ df = df.withColumn("uuid_nullsafe", uuid5("first", "last", null_placeholder="MIS
 Parse and extract JSON data from string columns:
 
 ```python
-from pyspark_utils.json import map_json_column, extract_json_keys_as_columns
+from pyspark_toolkit.json import map_json_column, extract_json_keys_as_columns
 
 # Parse JSON string to structured column
 df = spark.createDataFrame([
@@ -78,7 +78,7 @@ df = map_json_column(df, "json_data", drop=False)
 Partition data horizontally using UUID values for distributed processing:
 
 ```python
-from pyspark_utils.modulus import filter_uuid_for_modulus_and_offset
+from pyspark_toolkit.modulus import filter_uuid_for_modulus_and_offset
 
 # Create sample data with UUIDs
 df = spark.createDataFrame([
@@ -109,7 +109,7 @@ for partition_id in range(num_partitions):
 Perform bitwise XOR operations on binary/string columns:
 
 ```python
-from pyspark_utils.xor import xor, xor_word
+from pyspark_toolkit.xor import xor, xor_word
 
 # XOR two binary columns
 df = spark.createDataFrame([

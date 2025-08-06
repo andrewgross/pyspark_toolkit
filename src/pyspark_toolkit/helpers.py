@@ -4,7 +4,7 @@ import pyspark
 import pyspark.sql.functions as F
 from pyspark.sql import Column
 
-from pyspark_utils.types import ByteColumn, LongColumn, StringColumn
+from pyspark_toolkit.types import ByteColumn, LongColumn, StringColumn
 
 
 def safe_cast(col: Column, data_type: str) -> Column:

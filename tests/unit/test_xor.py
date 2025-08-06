@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pyspark.sql.functions as F
 
-from pyspark_utils.xor import xor, xor_word
+from pyspark_toolkit.xor import xor, xor_word
 from tests.helpers import run_column, xor_python
 
 
