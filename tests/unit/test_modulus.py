@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pyspark.sql.functions as F
 import pyspark.sql.types as T
-from pyspark.sql import SparkSession
 
 from pyspark_utils.modulus import (
     convert_hex_string_to_int,
@@ -15,14 +14,13 @@ from pyspark_utils.modulus import (
 from pyspark_utils.types import HexStringColumn, IntegerColumn, StringColumn, UUIDColumn
 
 
-def test_split_uuid_string_for_id():
+def test_split_uuid_string_for_id(spark):
     """
     Test that split_uuid_string_for_id extracts the 5th segment of a UUID.
     """
     # when I have a UUID string
     uuid = "e179017a-62b0-4996-8a38-e91aa9f1e179"
     data = [(uuid,)]
-    spark = SparkSession.builder.getOrCreate()
     df = spark.createDataFrame(data, ["uuid"])
 
     # and I apply split_uuid_string_for_id
@@ -32,7 +30,7 @@ def test_split_uuid_string_for_id():
     assert df.collect()[0]["result"] == "e91aa9f1e179"
 
 
-def test_split_last_chars():
+def test_split_last_chars(spark):
     """
     Test that split_last_chars extracts the last 4 characters.
     """
@@ -42,7 +40,6 @@ def test_split_last_chars():
         ("1234",),
         ("xyz",),  # less than 4 chars
     ]
-    spark = SparkSession.builder.getOrCreate()
     df = spark.createDataFrame(data, ["text"])
 
     # and I apply split_last_chars
@@ -55,7 +52,7 @@ def test_split_last_chars():
     assert rows[2]["result"] == "xyz"  # returns what's available if less than 4
 
 
-def test_convert_hex_string_to_int():
+def test_convert_hex_string_to_int(spark):
     """
     Test that convert_hex_string_to_int properly converts hex strings to integers.
     """
@@ -68,7 +65,6 @@ def test_convert_hex_string_to_int():
         ("not_hex",),  # invalid hex should return null
         (None,),  # null input
     ]
-    spark = SparkSession.builder.getOrCreate()
     df = spark.createDataFrame(data, ["hex_str"])
 
     # and I apply convert_hex_string_to_int
@@ -84,7 +80,7 @@ def test_convert_hex_string_to_int():
     assert rows[5]["result"] is None  # null input returns null
 
 
-def test_extract_id_from_uuid():
+def test_extract_id_from_uuid(spark):
     """
     Test that extract_id_from_uuid correctly extracts an integer from UUID.
     """
@@ -94,7 +90,6 @@ def test_extract_id_from_uuid():
         ("550e8400-e29b-41d4-a716-446655440000",),  # 0000 = 0
         ("123e4567-e89b-12d3-a456-426614174FFF",),  # 4FFF = 20479
     ]
-    spark = SparkSession.builder.getOrCreate()
     df = spark.createDataFrame(data, ["uuid"])
 
     # and I apply extract_id_from_uuid
@@ -107,7 +102,7 @@ def test_extract_id_from_uuid():
     assert rows[2]["result"] == 20479  # 0x4FFF
 
 
-def test_modulus_equals_offset():
+def test_modulus_equals_offset(spark):
     """
     Test that modulus_equals_offset correctly checks modulus equality.
     """
@@ -119,7 +114,6 @@ def test_modulus_equals_offset():
         (13,),  # 13 % 3 = 1
         (None,),
     ]
-    spark = SparkSession.builder.getOrCreate()
     df = spark.createDataFrame(data, ["value"])
 
     # and I check for modulus 3, offset 1
@@ -134,13 +128,12 @@ def test_modulus_equals_offset():
     assert rows[4]["matches_offset_1"] is None  # null handling
 
 
-def test_modulus_equals_offset_different_values():
+def test_modulus_equals_offset_different_values(spark):
     """
     Test modulus_equals_offset with different modulus and offset values.
     """
     # when I have an integer
     data = [(17,)]
-    spark = SparkSession.builder.getOrCreate()
     df = spark.createDataFrame(data, ["value"])
 
     # and I check various modulus/offset combinations
@@ -155,7 +148,7 @@ def test_modulus_equals_offset_different_values():
     assert row["mod_10_off_7"] is True  # 17 % 10 = 7
 
 
-def test_filter_uuid_for_modulus_and_offset():
+def test_filter_uuid_for_modulus_and_offset(spark):
     """
     Test that filter_uuid_for_modulus_and_offset correctly filters UUIDs.
     """
@@ -166,7 +159,6 @@ def test_filter_uuid_for_modulus_and_offset():
         ("123e4567-e89b-12d3-a456-426614174FFF", "record3"),  # ID: 20479, 20479 % 3 = 1
         ("a0b1c2d3-e4f5-6789-abcd-ef0123456789", "record4"),  # ID: 26505, 26505 % 3 = 0
     ]
-    spark = SparkSession.builder.getOrCreate()
     df = spark.createDataFrame(data, ["uuid", "data"])
 
     # and I filter for modulus 3, offset 1
@@ -178,7 +170,7 @@ def test_filter_uuid_for_modulus_and_offset():
     assert set(row["data"] for row in rows) == {"record1", "record3"}
 
 
-def test_filter_uuid_for_modulus_and_offset_different_offsets():
+def test_filter_uuid_for_modulus_and_offset_different_offsets(spark):
     """
     Test filter_uuid_for_modulus_and_offset with different offset values.
     """
@@ -190,7 +182,6 @@ def test_filter_uuid_for_modulus_and_offset_different_offsets():
         ("550e8400-e29b-41d4-a716-446655440003", "D"),  # 3 % 4 = 3
         ("550e8400-e29b-41d4-a716-446655440004", "E"),  # 4 % 4 = 0
     ]
-    spark = SparkSession.builder.getOrCreate()
     df = spark.createDataFrame(data, ["uuid", "label"])
 
     # and I filter with different offsets
@@ -206,7 +197,7 @@ def test_filter_uuid_for_modulus_and_offset_different_offsets():
     assert set(row["label"] for row in offset_3.collect()) == {"D"}
 
 
-def test_filter_uuid_for_modulus_handles_nulls():
+def test_filter_uuid_for_modulus_handles_nulls(spark):
     """
     Test that filter_uuid_for_modulus_and_offset handles null UUIDs gracefully.
     """
@@ -216,7 +207,6 @@ def test_filter_uuid_for_modulus_handles_nulls():
         (None, "null_uuid"),
         ("550e8400-e29b-41d4-a716-446655440000", "valid2"),
     ]
-    spark = SparkSession.builder.getOrCreate()
     df = spark.createDataFrame(data, ["uuid", "label"])
 
     # and I filter for modulus and offset
@@ -228,7 +218,7 @@ def test_filter_uuid_for_modulus_handles_nulls():
     assert rows[0]["label"] == "valid1"  # 57721 % 2 = 1
 
 
-def test_split_uuid_with_malformed_uuid():
+def test_split_uuid_with_malformed_uuid(spark):
     """
     Test that split_uuid_string_for_id handles malformed UUIDs.
     """
@@ -239,7 +229,6 @@ def test_split_uuid_with_malformed_uuid():
         ("a-b-c-d",),  # only 4 segments
         ("",),
     ]
-    spark = SparkSession.builder.getOrCreate()
     df = spark.createDataFrame(data, ["uuid"])
 
     # and I apply split_uuid_string_for_id
@@ -250,7 +239,7 @@ def test_split_uuid_with_malformed_uuid():
     assert all(row["result"] is None for row in rows)
 
 
-def test_end_to_end_uuid_partitioning():
+def test_end_to_end_uuid_partitioning(spark):
     """
     Test complete UUID-based partitioning workflow for horizontal scaling.
     """
@@ -258,7 +247,6 @@ def test_end_to_end_uuid_partitioning():
     import uuid
 
     data = [(str(uuid.uuid4()), i) for i in range(100)]
-    spark = SparkSession.builder.getOrCreate()
     df = spark.createDataFrame(data, ["uuid", "value"])
 
     # and I partition into 4 groups

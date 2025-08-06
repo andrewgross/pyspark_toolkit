@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import pyspark.sql.functions as F
 import pyspark.sql.types as T
-from pyspark.sql import SparkSession
 
 from pyspark_utils.hmac import _prepare_key, hmac_sha256
 from tests.helpers import hmac_python
 
 
-def test_hmac_short_key():
+def test_hmac_short_key(spark):
     """
     Test that we can compute an HMAC with a short (<64 bits) key
     """
@@ -18,14 +17,13 @@ def test_hmac_short_key():
         (key, message),
     ]
     columns = ["key", "message"]
-    spark = SparkSession.builder.getOrCreate()
     df = spark.createDataFrame(data, columns)
     df = df.withColumn("hmac", hmac_sha256(F.col("key"), F.col("message")))
     expected_result = hmac_python(key, message)
     assert expected_result == bytes(df.collect()[0]["hmac"]).hex()
 
 
-def test_hmac_boundary_key():
+def test_hmac_boundary_key(spark):
     """
     Test that we can compute an HMAC with a boundary (=64 bits) key
     """
@@ -35,14 +33,13 @@ def test_hmac_boundary_key():
         (key, message),
     ]
     columns = ["key", "message"]
-    spark = SparkSession.builder.getOrCreate()
     df = spark.createDataFrame(data, columns)
     df = df.withColumn("hmac", hmac_sha256(F.col("key"), F.col("message")))
     expected_result = hmac_python(key, message)
     assert expected_result == bytes(df.collect()[0]["hmac"]).hex()
 
 
-def test_hmac_long_key():
+def test_hmac_long_key(spark):
     """
     Test that we can compute the HMAC of a message with a long (>64 bits) key
     """
@@ -52,14 +49,13 @@ def test_hmac_long_key():
         (key, message),
     ]
     columns = ["key", "message"]
-    spark = SparkSession.builder.getOrCreate()
     df = spark.createDataFrame(data, columns)
     df = df.withColumn("hmac", hmac_sha256(F.col("key"), F.col("message")))
     expected_result = hmac_python(key, message)
     assert expected_result == bytes(df.collect()[0]["hmac"]).hex()
 
 
-def test_prepare_short_key():
+def test_prepare_short_key(spark):
     """
     Test that we can pad a key to the correct length
     """
@@ -69,7 +65,6 @@ def test_prepare_short_key():
     data = [
         (key),
     ]
-    spark = SparkSession.builder.getOrCreate()
     df = spark.createDataFrame(data, T.BinaryType())
     df = df.withColumn(
         "key",
@@ -82,7 +77,7 @@ def test_prepare_short_key():
     assert expected_result == bytes(df.collect()[0]["key"])
 
 
-def test_prepare_long_key():
+def test_prepare_long_key(spark):
     """
     Test that we can pad a key to the correct length
     """
@@ -92,7 +87,6 @@ def test_prepare_long_key():
     data = [
         (key),
     ]
-    spark = SparkSession.builder.getOrCreate()
     df = spark.createDataFrame(data, T.BinaryType())
     df = df.withColumn(
         "key",

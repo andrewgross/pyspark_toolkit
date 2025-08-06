@@ -5,7 +5,6 @@ import json
 import pyspark.sql.functions as F
 import pyspark.sql.types as T
 import pytest
-from pyspark.sql import SparkSession
 
 from pyspark_utils.json_functions import (
     clean_dataframe_with_separate_line_item_lists,
@@ -15,11 +14,6 @@ from pyspark_utils.json_functions import (
     extract_json_keys_as_columns,
     map_json_column,
 )
-
-
-@pytest.fixture
-def spark():
-    return SparkSession.builder.getOrCreate()
 
 
 def test_map_json_column(spark):
