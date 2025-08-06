@@ -1,4 +1,0 @@
--r requirements.txt
-pre_commit
-pytest
-black

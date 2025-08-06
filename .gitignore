@@ -1,19 +1,17 @@
-src/pyspark_utils.egg-info/
-tests/__pycache__
-.cache
-*.pyc
-*.swp
-.coverage
-.DS_Store
-dist/*
-.build.log
-*.egg-info/*
-build/*
-htmlcov/*
-*~
-*#
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+.ruff_cache
 .vscode
-bin/
-lib/
-share/
-pyvenv.cfg
+.cursor
+.claude
+
+.pytest_cache/
+Makefile.*

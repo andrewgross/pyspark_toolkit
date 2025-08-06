@@ -1,65 +1,52 @@
-PACKAGE=pyspark_utils
-CUSTOM_PIP_INDEX=pyspark_utils
+.PHONY: help setup test clean lint format build all
 
-all: setup test
+help:
+	@echo "Available targets:"
+	@echo "  setup        - Install dependencies and setup pre-commit"
+	@echo "  test         - Run all tests (examples + src)"
+	@echo "  test-reset   - Clean and run tests"
+	@echo "  lint         - Run pre-commit hooks on all files"
+	@echo "  format       - Run formatting tools (ruff)"
+	@echo "  build        - Build the package"
+	@echo "  publish      - Publish the package to PyPI"
+	@echo "  clean        - Clean up temp files and build artifacts"
+	@echo "  all          - Setup and test"
 
-prepare: clean install_deps
+setup:
+	uv sync --group dev
+	uv run pre-commit install
 
-setup: prepare
+lint:
+	uv run pre-commit run --all-files
 
-pre_commit: setup
-	@pre-commit run --all-files
+format:
+	uv run ruff format .
+	uv run ruff check .
 
 test:
-	@pytest tests/
+	uv run pytest tests/ -v
+
+test-reset: clean test
+
+build: clean
+	@echo "Building package..."
+	uv build
+	@echo "Build complete!"
+
+
+publish: build
+	@echo "Publishing package..."
+	@uv publish
+	@echo "Publish complete!"
+
 
 clean:
-	@rm -rf .cache
-	@rm -rf build/
-	@echo "Removing garbage..."
-	@find . -name '*.pyc' -delete
-	@find . -name '*.so' -delete
-	@find . -name __pycache__ -delete
-	@rm -rf .coverage *.egg-info *.log build dist MANIFEST yc
+	@echo "Cleaning up..."
+	@rm -rf __pycache__/ .pytest_cache/
+	@rm -rf dist/ build/
+	@find . -name "*.pyc" -delete
+	@find . -name "*.egg-info" -type d -exec rm -rf {} + 2>/dev/null || true
+	@find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+	@echo "Done!"
 
-install_deps:
-	@if [ -z $$VIRTUAL_ENV ]; then \
-		echo "===================================================="; \
-		echo "You're not running this from a virtualenv, wtf?"; \
-		echo "ಠ_ಠ"; \
-		echo "===================================================="; \
-		exit 1; \
-	fi
-
-	@if [ -z $$SKIP_DEPS ]; then \
-		echo "Installing missing dependencies..."; \
-		[ -e development.txt  ] && pip install -r development.txt --quiet; \
-	fi
-	@pre-commit install
-	@pip install -e . &> .build.log
-
-build:
-	python -m build --sdist --wheel
-
-publish: clean tag build
-	@if [ -e "$$HOME/.pypirc" ]; then \
-		echo "Uploading to '$(CUSTOM_PIP_INDEX)'"; \
-		python -m twine upload --repository $(CUSTOM_PIP_INDEX) dist/*; \
-	else \
-		echo "You should create a file called '.pypirc' under your home dir.\n"; \
-		echo "That's the right place to configure 'pypi' repos.\n"; \
-		exit 1; \
-	fi
-
-tag:
-	@if [ $$(git rev-list $$(git describe --abbrev=0 --tags)..HEAD --count) -gt 0 ]; then \
-		if [ $$(git log  -n 1 --oneline $$(git describe --abbrev=0 --tags)..HEAD CHANGELOG.rst | wc -l) -gt 0 ]; then \
-			git tag $$(python setup.py --version) && git push --tags || echo 'Version already released, update your version!'; \
-		else \
-			echo "CHANGELOG not updated since last release!"; \
-			exit 1; \
-		fi; \
-	else \
-		echo "No commits since last release!"; \
-		exit 1;\
-	fi
+all: setup test
