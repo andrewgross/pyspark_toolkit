@@ -1,9 +1,18 @@
 from __future__ import annotations
 
+import warnings
+
 from pyspark.sql import functions as F
 
 from pyspark_utils.hmac import hmac_sha256
 from pyspark_utils.types import ByteColumn, IntegerColumn, StringColumn
+
+warnings.warn(
+    "The s3 module is deprecated and non-functional due to deep call graph issues with HMAC "
+    "that cause server hangs. Do not use this module in production.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 def generate_presigned_url(
@@ -17,6 +26,9 @@ def generate_presigned_url(
     """
     Generate a presigned URL for an S3 object using AWS Signature Version 4.
 
+    **WARNING: This function is non-functional due to deep call graph issues with HMAC
+    that cause server hangs. Do not use in production.**
+
     Args:
         bucket (StringColumn): The name of the S3 bucket.
         key (StringColumn): The key (path) of the S3 object.
@@ -28,6 +40,13 @@ def generate_presigned_url(
     Returns:
         StringColumn: The presigned URL for the S3 object.
     """
+    warnings.warn(
+        "generate_presigned_url is non-functional due to deep call graph issues with HMAC "
+        "that cause server hangs. Do not use in production.",
+        RuntimeWarning,
+        stacklevel=2,
+    )
+
     # Step 1: Get the current UTC timestamp
     now = F.current_timestamp()
 
@@ -114,6 +133,11 @@ def generate_presigned_url(
 
 
 def _get_signature_key(aws_secret_key, date_stamp, region, service):
+    """
+    Helper function for AWS signature generation.
+
+    **WARNING: This function is non-functional due to deep call graph issues.**
+    """
     key_prefix = F.concat(
         F.lit("AWS4"),
         aws_secret_key,
