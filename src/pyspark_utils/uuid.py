@@ -1,12 +1,11 @@
 import uuid
-from typing import List
 
 import pyspark.sql.functions as F
 from pyspark.sql import Column
 
 
 def uuid5(
-    *columns: List[str | Column],
+    *columns: str | Column,
     namespace=uuid.NAMESPACE_OID,
     separator: str = "-",
     null_placeholder: str = "\0",

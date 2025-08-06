@@ -1,4 +1,3 @@
-import pyspark
 import pyspark.sql.functions as F
 from pyspark.sql import DataFrame
 from pyspark.sql.types import ArrayType, MapType, StructType
