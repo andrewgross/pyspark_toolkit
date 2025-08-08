@@ -33,7 +33,6 @@ def test_map_json_column(spark):
 
     # then I should get a dataframe with parsed JSON as StructType
     assert "json_data" in result_df.columns
-    assert "json_data_raw" not in result_df.columns
 
     schema = result_df.schema["json_data"].dataType
     assert isinstance(schema, T.StructType)
@@ -46,9 +45,9 @@ def test_map_json_column(spark):
     assert row.json_data.city == "NYC"
 
 
-def test_map_json_column_with_drop_false(spark):
+def test_map_json_column_with_output_column(spark):
     """
-    Test that map_json_column preserves raw column when drop=False.
+    Test that map_json_column preserves raw column when output_column is provided.
     """
     # when I have a dataframe with JSON strings
     data = [
@@ -57,16 +56,16 @@ def test_map_json_column_with_drop_false(spark):
     ]
     df = spark.createDataFrame(data, ["json_data"])
 
-    # and I apply map_json_column with drop=False
-    result_df = map_json_column(df, "json_data", drop=False)
+    # and I apply map_json_column with and output column
+    result_df = map_json_column(df, "json_data", output_column="json_data_parsed")
 
-    # then I should get both the parsed JSON and the raw column
+    # then I should get both the original and the parsed column
     assert "json_data" in result_df.columns
-    assert "json_data_raw" in result_df.columns
+    assert "json_data_parsed" in result_df.columns
 
     row = result_df.first()
-    assert row.json_data.key == "value1"
-    assert row.json_data_raw == '{"key": "value1"}'
+    assert row.json_data == '{"key": "value1"}'
+    assert row.json_data_parsed.key == "value1"
 
 
 def test_extract_json_keys_as_columns_struct_type(spark):

@@ -1,9 +1,11 @@
+from typing import Optional
+
 import pyspark.sql.functions as F
 from pyspark.sql import DataFrame
 from pyspark.sql.types import ArrayType, MapType, StructType
 
 
-def map_json_column(df: DataFrame, column: str, drop=True) -> DataFrame:
+def map_json_column(df: DataFrame, column: str, output_column: Optional[str] = None) -> DataFrame:
     """
     Takes a column of JSON strings and remaps them to a Map type by
     inferring the schema from the first row.
@@ -11,26 +13,24 @@ def map_json_column(df: DataFrame, column: str, drop=True) -> DataFrame:
     Args:
         df: The DataFrame to map the JSON column
         column: The column to map
-        drop: Whether to drop the original column
+        output_column: The column to map the JSON to. If not provided, the original column is used and overwritten.
     Returns:
         The DataFrame with the JSON column mapped to a Map type
     """
-    raw_column = f"{column}_raw"
-    df = df.withColumnRenamed(column, raw_column)
+    if output_column is None:
+        output_column = column
 
     # Get first non-null JSON string to infer schema
-    sample_row = df.filter(F.col(raw_column).isNotNull()).first()
+    sample_row = df.filter(F.col(column).isNotNull()).first()
     if sample_row is None:
-        raise ValueError(f"No non-null JSON strings found in column '{raw_column}'")
-    sample_json = sample_row[raw_column]
+        raise ValueError(f"No non-null JSON strings found in column '{column}'")
+    sample_json = sample_row[column]
 
     # Infer schema from the sample
     schema = F.schema_of_json(F.lit(sample_json))
 
     # Parse JSON using the inferred schema
-    df = df.withColumn(column, F.from_json(F.col(raw_column), schema=schema))
-    if drop:
-        df = df.drop(raw_column)
+    df = df.withColumn(output_column, F.from_json(F.col(column), schema=schema))
     return df
 
 
