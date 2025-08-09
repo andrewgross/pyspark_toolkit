@@ -165,7 +165,9 @@ sdist = { url = "https://files.pythonhosted.org/packages/2e/62/36e50d38e5fe158e9
 [[package]]
 name = "pyspark-toolkit"
 source = { editable = "." }
-dependencies = [
+
+[package.optional-dependencies]
+pyspark = [
     { name = "pyspark" },
 ]
 
@@ -173,17 +175,20 @@ dependencies = [
 dev = [
     { name = "pre-commit" },
     { name = "psutil" },
+    { name = "pyspark" },
     { name = "pytest" },
     { name = "ruff" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pyspark" }]
+requires-dist = [{ name = "pyspark", marker = "extra == 'pyspark'", specifier = ">=3.5.0" }]
+provides-extras = ["pyspark"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "pre-commit", specifier = ">=4.2.0" },
     { name = "psutil", specifier = ">=7.0.0" },
+    { name = "pyspark", specifier = ">=3.5.0" },
     { name = "pytest", specifier = ">=8.4.1" },
     { name = "ruff", specifier = ">=0.12.7" },
 ]

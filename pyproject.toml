@@ -5,9 +5,7 @@ description = "PySpark Utils"
 readme = "README.md"
 requires-python = ">=3.9.0"
 
-dependencies = [
-    "pyspark",
-]
+
 
 [dependency-groups]
 dev = [
@@ -15,6 +13,12 @@ dev = [
     "psutil>=7.0.0",
     "pytest>=8.4.1",
     "ruff>=0.12.7",
+    "pyspark>=3.5.0",
+]
+
+[project.optional-dependencies]
+pyspark = [
+    "pyspark>=3.5.0",
 ]
 
 [tool.ruff]
