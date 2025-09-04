@@ -61,3 +61,41 @@ def split_last_chars(col: StringColumn) -> HexStringColumn:
         The last 4 characters of the column
     """
     return HexStringColumn(F.substring(col, -4, 4))
+
+
+def map_concat(*cols: Column) -> Column:
+    """
+    Concatenates multiple map columns with right-override merge strategy.
+
+    When duplicate keys exist across maps, values from rightmost maps take precedence.
+    This mimics PySpark's map_concat function but with built-in LAST_WIN behavior
+    without requiring spark configuration changes.
+
+    Args:
+        *cols: Variable number of map columns to concatenate
+
+    Returns:
+        Column containing the concatenated map with rightmost values for duplicate keys
+    """
+    if not cols:
+        return F.map_from_arrays(F.array(), F.array())
+
+    if len(cols) == 1:
+        return cols[0]
+
+    # Start with the first map
+    result = cols[0]
+
+    # Merge each subsequent map, with later maps overriding earlier ones
+    for next_map in cols[1:]:
+        # Get all keys from both maps
+        result_keys = F.map_keys(result)
+        next_keys = F.map_keys(next_map)
+        all_keys = F.array_distinct(F.array_union(result_keys, next_keys))
+
+        # For each key, take value from next_map if it exists, otherwise from result
+        values = F.transform(all_keys, lambda key: F.coalesce(F.element_at(next_map, key), F.element_at(result, key)))
+
+        result = F.map_from_arrays(all_keys, values)
+
+    return result
