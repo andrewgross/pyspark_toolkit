@@ -71,6 +71,8 @@ def map_concat(*cols: Column) -> Column:
     This mimics PySpark's map_concat function but with built-in LAST_WIN behavior
     without requiring spark configuration changes.
 
+    Uses map_zip_with for efficient merging (requires PySpark 3.1+).
+
     Args:
         *cols: Variable number of map columns to concatenate
 
@@ -86,16 +88,9 @@ def map_concat(*cols: Column) -> Column:
     # Start with the first map
     result = cols[0]
 
-    # Merge each subsequent map, with later maps overriding earlier ones
+    # Merge each subsequent map using map_zip_with for efficiency (PySpark 3.1+)
     for next_map in cols[1:]:
-        # Get all keys from both maps
-        result_keys = F.map_keys(result)
-        next_keys = F.map_keys(next_map)
-        all_keys = F.array_distinct(F.array_union(result_keys, next_keys))
-
-        # For each key, take value from next_map if it exists, otherwise from result
-        values = F.transform(all_keys, lambda key: F.coalesce(F.element_at(next_map, key), F.element_at(result, key)))
-
-        result = F.map_from_arrays(all_keys, values)
+        # Use map_zip_with with right-override: take v2 if not null, otherwise v1
+        result = F.map_zip_with(result, next_map, lambda k, v1, v2: F.coalesce(v2, v1))
 
     return result

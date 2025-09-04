@@ -16,6 +16,7 @@ from pyspark_toolkit.uuid import uuid5
 from pyspark_toolkit.json import map_json_column
 from pyspark_toolkit.modulus import partition_by_uuid
 from pyspark_toolkit.xor import xor
+from pyspark_toolkit.helpers import map_concat
 
 # Your PySpark code here
 ```
@@ -68,9 +69,9 @@ df = map_json_column(df, "json_data")
 df = extract_json_keys_as_columns(df, "json_data")
 # Result: DataFrame with columns: json_data, name, age, city
 
-# Keep original raw column
-df = map_json_column(df, "json_data", drop=False)
-# Result: DataFrame with both json_data (parsed) and json_data_raw (original string)
+# Keep original raw column by specifying output_column
+df = map_json_column(df, "json_data", output_column="json_data_parsed")
+# Result: DataFrame with both json_data (original string) and json_data_parsed (parsed)
 ```
 
 ### UUID-based Data Partitioning
@@ -104,6 +105,33 @@ for partition_id in range(num_partitions):
 # Useful for parallel batch processing, data migration, or distributed analysis
 ```
 
+### Map Concatenation
+
+Concatenate multiple map columns with right-override merge strategy. This provides an alternative to PySpark's built-in `map_concat` function when you cannot set `spark.sql.mapKeyDedupPolicy=LAST_WIN` (e.g., in shared Databricks environments or managed clusters):
+
+```python
+from pyspark_toolkit.helpers import map_concat
+import pyspark.sql.functions as F
+
+# Create sample data with map columns
+df = spark.createDataFrame([
+    ({"a": 1, "b": 2}, {"c": 3, "d": 4}),
+    ({"x": 10, "y": 20}, {"y": 200, "z": 30})
+], ["map1", "map2"])
+
+# Concatenate maps - rightmost values win for duplicate keys
+df = df.withColumn("merged", map_concat(F.col("map1"), F.col("map2")))
+# Result: {"a": 1, "b": 2, "c": 3, "d": 4} and {"x": 10, "y": 200, "z": 30}
+
+# Concatenate multiple maps
+df = spark.createDataFrame([
+    ({"a": 1}, {"a": 2, "b": 3}, {"b": 4, "c": 5})
+], ["map1", "map2", "map3"])
+
+df = df.withColumn("result", map_concat(F.col("map1"), F.col("map2"), F.col("map3")))
+# Result: {"a": 2, "b": 4, "c": 5} (rightmost wins: a from map2, b from map3)
+```
+
 ### XOR Operations
 
 Perform bitwise XOR operations on binary/string columns:
@@ -125,6 +153,42 @@ df = df.withColumn("xor_int", xor_word(F.col("col1"), F.col("col2")))
 
 # Custom byte width
 df = df.withColumn("xor_128", xor(F.col("col1"), F.col("col2"), byte_width=128))
+```
+
+### Additional JSON Processing
+
+Examples for advanced JSON operations:
+
+```python
+from pyspark_toolkit.json import explode_all_list_columns, clean_dataframe_with_separate_lists
+
+# Create DataFrame with nested JSON containing arrays
+df = spark.createDataFrame([
+    ('{"users": ["alice", "bob"], "scores": [95, 87], "active": [true, false]}',)
+], ["json_col"])
+
+# Parse JSON and explode all list columns simultaneously
+df = map_json_column(df, "json_col")
+df = explode_all_list_columns(df, ["users", "scores", "active"])
+# Result: Each array element gets its own row with matching indices
+
+# Clean complex nested JSON structures
+df = clean_dataframe_with_separate_lists(df, "json_col")
+```
+
+### HMAC Operations
+
+Generate HMAC-SHA256 hashes for data integrity:
+
+```python
+from pyspark_toolkit.hmac import hmac_sha256
+
+df = spark.createDataFrame([
+    ("secret_key", "message_to_hash"),
+    ("another_key", "different_message")
+], ["key", "message"])
+
+df = df.withColumn("hmac", hmac_sha256(F.col("key"), F.col("message")))
 ```
 
 ## Available Functions
@@ -150,9 +214,16 @@ df = df.withColumn("xor_128", xor(F.col("col1"), F.col("col2"), byte_width=128))
 - `xor_word()` - XOR for short strings (≤8 chars) returning integer
 - `hmac_sha256()` - HMAC-SHA256 hash generation
 
+### Map Operations
+- `map_concat()` - Concatenate multiple map columns with right-override merge strategy
+
 ### Utilities
 - `safe_cast()` - Version-aware casting (PySpark 3.5/4.0 compatible)
 - `chars_to_int()` - Convert character bytes to integer
+- `pad_key()` - Pad binary key with zeros to specified block size
+- `sha2_binary()` - Generate binary SHA-2 hash from input column
+- `split_last_chars()` - Extract last 4 characters from string column
+- `split_uuid_string_for_id()` - Extract UUID string components for partitioning
 
 ## Compatibility
 
