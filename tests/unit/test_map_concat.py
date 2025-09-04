@@ -11,6 +11,16 @@ def spark():
     return SparkSession.builder.appName("test_map_concat").getOrCreate()
 
 
+@pytest.fixture
+def spark_with_last_win():
+    """Spark session configured with LAST_WIN map key dedup policy."""
+    spark = SparkSession.builder.appName("test_map_concat").getOrCreate()
+    original_policy = spark.conf.get("spark.sql.mapKeyDedupPolicy", "EXCEPTION")
+    spark.conf.set("spark.sql.mapKeyDedupPolicy", "LAST_WIN")
+    yield spark
+    spark.conf.set("spark.sql.mapKeyDedupPolicy", original_policy)
+
+
 def test_when_two_maps_with_no_overlap_then_concatenates_all_keys(spark):
     """
     Test that map_concat properly merges maps with no duplicate keys.
@@ -249,3 +259,47 @@ def test_doc_example_null_values(spark):
     # then null values should be preserved in the result
     expected = {1: "a", 2: "b", 3: None}
     assert result == expected
+
+
+def test_comparison_with_builtin_map_concat_last_win(spark_with_last_win):
+    """
+    Test that our map_concat produces identical results to built-in map_concat with LAST_WIN.
+    This ensures our implementation matches PySpark's behavior exactly.
+    """
+    test_cases = [
+        # Basic non-overlapping case
+        ("SELECT map(1, 'a', 2, 'b') as map1, map(3, 'c') as map2", 2),
+        # Overlapping keys case
+        ("SELECT map(1, 'a', 2, 'b') as map1, map(2, 'c', 3, 'd') as map2", 2),
+        # Three maps case
+        ("SELECT map(1, 'a') as map1, map(2, 'b') as map2, map(3, 'c') as map3", 3),
+        # Empty map case
+        ("SELECT map(1, 'a', 2, 'b') as map1, map() as map2", 2),
+        # Null values case
+        ("SELECT map(1, 'a', 2, 'b') as map1, map(3, null) as map2", 2),
+        # Complex overlapping case with multiple duplicates
+        (
+            "SELECT map(1, 'first', 2, 'second') as map1, map(2, 'override', 3, 'third') as map2, map(1, 'final') as map3",
+            3,
+        ),
+    ]
+
+    for sql_query, num_maps in test_cases:
+        # when I have test data
+        df = spark_with_last_win.sql(sql_query)
+
+        # and I use built-in map_concat with LAST_WIN
+        if num_maps == 2:
+            builtin_result_df = df.select(F.map_concat("map1", "map2").alias("builtin_result"))
+            custom_result_df = df.select(map_concat(F.col("map1"), F.col("map2")).alias("custom_result"))
+        elif num_maps == 3:
+            builtin_result_df = df.select(F.map_concat("map1", "map2", "map3").alias("builtin_result"))
+            custom_result_df = df.select(map_concat(F.col("map1"), F.col("map2"), F.col("map3")).alias("custom_result"))
+
+        builtin_result = builtin_result_df.collect()[0]["builtin_result"]
+        custom_result = custom_result_df.collect()[0]["custom_result"]
+
+        # then our function should produce identical results
+        assert custom_result == builtin_result, (
+            f"Mismatch for query: {sql_query}\nBuilt-in: {builtin_result}\nCustom: {custom_result}"
+        )
