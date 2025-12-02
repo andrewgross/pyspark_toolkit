@@ -5,21 +5,19 @@ description = "PySpark Utils"
 readme = "README.md"
 requires-python = ">=3.9.0"
 
-
-
 [dependency-groups]
 dev = [
-    "pre-commit>=4.2.0",
-    "psutil>=7.0.0",
-    "pytest>=8.4.1",
-    "ruff>=0.12.7",
-    "pyspark",
+  "pre-commit>=4.2.0",
+  "psutil>=7.0.0",
+  "pytest>=8.4.1",
+  "ruff>=0.12.7",
+  "pyspark",
+  "boto3>=1.42.0",
+  "freezegun>=1.5.5",
 ]
 
 [project.optional-dependencies]
-pyspark = [
-    "pyspark",
-]
+pyspark = ["pyspark"]
 
 [tool.ruff]
 line-length = 120
@@ -28,9 +26,7 @@ line-length = 120
 select = ["I"]
 
 [tool.pytest.ini_options]
-pythonpath = [
-  "."
-]
+pythonpath = ["."]
 
 [build-system]
 requires = ["setuptools>=61.0"]

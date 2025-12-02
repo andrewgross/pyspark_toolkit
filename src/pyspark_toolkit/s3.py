@@ -1,149 +1,248 @@
 from __future__ import annotations
 
-import warnings
+import datetime
 
+from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
 from pyspark_toolkit.hmac import hmac_sha256
-from pyspark_toolkit.types import ByteColumn, IntegerColumn, StringColumn
+from pyspark_toolkit.types import ByteColumn
 
-warnings.warn(
-    "The s3 module is deprecated and non-functional due to deep call graph issues with HMAC "
-    "that cause server hangs. Do not use this module in production.",
-    DeprecationWarning,
-    stacklevel=2,
-)
+# Prefix for all intermediate columns to avoid collisions
+_TEMP_COL_PREFIX = "__s3_presign_"
+
+
+def _to_binary(col):
+    """Convert a string column to binary using UTF-8 encoding."""
+    return F.encode(col, "UTF-8")
 
 
 def generate_presigned_url(
-    bucket: StringColumn,
-    key: StringColumn,
-    aws_access_key: ByteColumn,
-    aws_secret_key: ByteColumn,
-    region: StringColumn,
-    expiration: IntegerColumn,
-) -> StringColumn:
+    df: DataFrame,
+    bucket_col: str,
+    key_col: str,
+    aws_access_key_col: str,
+    aws_secret_key_col: str,
+    region_col: str,
+    expiration_col: str,
+    output_col: str = "presigned_url",
+) -> DataFrame:
     """
-    Generate a presigned URL for an S3 object using AWS Signature Version 4.
+    Generate presigned URLs for S3 objects using AWS Signature Version 4.
 
-    **WARNING: This function is non-functional due to deep call graph issues with HMAC
-    that cause server hangs. Do not use in production.**
+    This function adds a new column containing presigned URLs for S3 GET requests.
+    The computation is staged across multiple intermediate columns to avoid
+    deep expression trees that can cause Spark's Catalyst optimizer to OOM.
 
     Args:
-        bucket (StringColumn): The name of the S3 bucket.
-        key (StringColumn): The key (path) of the S3 object.
-        aws_access_key (ByteColumn): The AWS access key.
-        aws_secret_key (ByteColumn): The AWS secret key.
-        region (StringColumn): The AWS region where the S3 bucket is located.
-        expiration (IntegerColumn): The expiration time in seconds for the presigned URL.
+        df: Input DataFrame containing the required columns.
+        bucket_col: Name of column containing S3 bucket names.
+        key_col: Name of column containing S3 object keys (paths).
+        aws_access_key_col: Name of column containing AWS access keys.
+        aws_secret_key_col: Name of column containing AWS secret keys (string, will be encoded).
+        region_col: Name of column containing AWS region names.
+        expiration_col: Name of column containing expiration times in seconds.
+        output_col: Name of the output column for presigned URLs.
 
     Returns:
-        StringColumn: The presigned URL for the S3 object.
+        DataFrame with the presigned URL column added.
+
+    Example:
+        >>> df = spark.createDataFrame([
+        ...     ("my-bucket", "path/to/file.txt", "AKIAIOSFODNN7EXAMPLE",
+        ...      "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", "us-east-1", 3600)
+        ... ], ["bucket", "key", "access_key", "secret_key", "region", "expiration"])
+        >>> result = generate_presigned_url(
+        ...     df, "bucket", "key", "access_key", "secret_key", "region", "expiration"
+        ... )
     """
-    warnings.warn(
-        "generate_presigned_url is non-functional due to deep call graph issues with HMAC "
-        "that cause server hangs. Do not use in production.",
-        RuntimeWarning,
-        stacklevel=2,
+    # Define temp column names
+    t = lambda name: f"{_TEMP_COL_PREFIX}{name}"
+
+    # Stage 1: Timestamp values
+
+    # We mimic the behavior of botocore.auth.get_current_datetime()
+    # https://github.com/boto/botocore/blob/cee3e3141b3d5171c6ee0a0bc9bd9abcd209e594/botocore/compat.py#L309
+    datetime_now = datetime.datetime.now(datetime.timezone.utc)
+    datetime_now = datetime_now.replace(tzinfo=None)
+    df = df.withColumn(
+        t("now_utc"),
+        F.lit(datetime_now),
+    )
+    # Format the UTC timestamp for AWS signing
+    df = df.withColumn(
+        t("amz_date"),
+        F.concat(
+            F.date_format(F.col(t("now_utc")), "yyyyMMdd"),
+            F.lit("T"),
+            F.date_format(F.col(t("now_utc")), "HHmmss"),
+            F.lit("Z"),
+        ),
+    )
+    df = df.withColumn(t("date_stamp"), F.date_format(F.col(t("now_utc")), "yyyyMMdd"))
+
+    # Stage 2: URI and host components
+    df = df.withColumn(t("canonical_uri"), F.concat(F.lit("/"), F.col(key_col)))
+    df = df.withColumn(
+        t("host"),
+        F.concat(F.col(bucket_col), F.lit(".s3."), F.col(region_col), F.lit(".amazonaws.com")),
+    )
+    df = df.withColumn(
+        t("endpoint"),
+        F.concat(F.lit("https://"), F.col(t("host")), F.col(t("canonical_uri"))),
     )
 
-    # Step 1: Get the current UTC timestamp
-    now = F.current_timestamp()
-
-    # Step 2: Generate formatted date strings (amz_date and date_stamp)
-    amz_date = F.date_format(now, "yyyyMMdd'T'HHmmss'Z'")
-    date_stamp = F.date_format(now, "yyyyMMdd")
-
-    # Step 3: Create the canonical URI and host
-    canonical_uri = F.concat(F.lit("/"), F.lit(key))
-    host = F.concat(bucket, F.lit(".s3."), region, F.lit(".amazonaws.com"))
-    endpoint = F.concat(F.lit("https://"), host, canonical_uri)
-
-    # Step 4: Build the canonical query string
-    canonical_querystring = F.concat(
-        F.lit("X-Amz-Algorithm=AWS4-HMAC-SHA256"),
-        F.lit("&X-Amz-Credential="),
-        F.lit(aws_access_key),
-        F.lit("/"),
-        date_stamp,
-        F.lit("/"),
-        F.lit(region),
-        F.lit("/s3/aws4_request"),
-        F.lit("&X-Amz-Date="),
-        amz_date,
-        F.lit("&X-Amz-Expires="),
-        F.lit(str(expiration)),
-        F.lit("&X-Amz-SignedHeaders=host"),
+    # Stage 3: Canonical query string
+    # Note: The credential value must use URL-encoded slashes (%2F) as per AWS Signature v4
+    df = df.withColumn(
+        t("canonical_qs"),
+        F.concat(
+            F.lit("X-Amz-Algorithm=AWS4-HMAC-SHA256"),
+            F.lit("&X-Amz-Credential="),
+            F.col(aws_access_key_col),
+            F.lit("%2F"),
+            F.col(t("date_stamp")),
+            F.lit("%2F"),
+            F.col(region_col),
+            F.lit("%2Fs3%2Faws4_request"),
+            F.lit("&X-Amz-Date="),
+            F.col(t("amz_date")),
+            F.lit("&X-Amz-Expires="),
+            F.col(expiration_col).cast("string"),
+            F.lit("&X-Amz-SignedHeaders=host"),
+        ),
     )
 
-    # Step 5: Create the canonical headers and signed headers
-    canonical_headers = F.concat(F.lit("host:"), host, F.lit("\n"))
-    signed_headers = F.lit("host")
-
-    # Step 6: Set payload hash (we'll use 'UNSIGNED-PAYLOAD' as per S3 requirements for GET requests)
-    payload_hash = F.lit("UNSIGNED-PAYLOAD")
-
-    # Step 7: Build the canonical request
-    canonical_request = F.concat(
-        F.lit("GET\n"),
-        canonical_uri,
-        F.lit("\n"),
-        canonical_querystring,
-        F.lit("\n"),
-        canonical_headers,
-        F.lit("\n"),
-        signed_headers,
-        F.lit("\n"),
-        payload_hash,
+    # Stage 4: Canonical headers
+    df = df.withColumn(
+        t("canonical_headers"),
+        F.concat(F.lit("host:"), F.col(t("host")), F.lit("\n")),
     )
 
-    # Step 8: Create the string to sign
-    credential_scope = F.concat(
-        date_stamp,
-        F.lit("/"),
-        region,
-        F.lit("/s3/aws4_request"),
+    # Stage 5: Canonical request
+    df = df.withColumn(
+        t("canonical_request"),
+        F.concat_ws(
+            "\n",
+            F.lit("GET"),
+            F.col(t("canonical_uri")),  # path, possible we are not handling this correctly with quoting
+            F.col(t("canonical_qs")),  # canonical_query_string
+            F.col(
+                t("canonical_headers")
+            ),  # Do we need an extra \n here? I think its already included in the canonical_headers column
+            F.lit("host"),  # signed_headers
+            F.lit("UNSIGNED-PAYLOAD"),  # payload_hash,
+            # We use UNSIGNED-PAYLOAD because we don't know the payload when creating the presigned URL, following the AWS documentation
+        ),
     )
 
-    string_to_sign = F.concat(
-        F.lit("AWS4-HMAC-SHA256\n"),
-        amz_date,
-        F.lit("\n"),
-        credential_scope,
-        F.lit("\n"),
-        F.sha2(canonical_request, 256),
+    # Stage 6: Credential scope and string to sign
+    df = df.withColumn(
+        t("credential_scope"),
+        F.concat_ws(
+            "/",
+            F.col(t("date_stamp")),
+            F.col(region_col),
+            F.lit("s3"),
+            F.lit("aws4_request"),
+        ),
     )
 
-    # Step 9: Generate the signing key
-    signing_key = _get_signature_key(aws_secret_key, date_stamp, region, "s3")
-
-    # Step 10: Call hmac_256 function to generate the signature
-    signature = hmac_sha256(ByteColumn(signing_key), ByteColumn(string_to_sign))
-
-    # Step 11: Build the final signed URL
-    signed_url = F.concat(
-        endpoint,
-        F.lit("?"),
-        canonical_querystring,
-        F.lit("&X-Amz-Signature="),
-        signature,
+    df = df.withColumn(
+        t("canonical_request_hash"),
+        F.sha2(F.col(t("canonical_request")), 256),
     )
 
-    return StringColumn(signed_url)
-
-
-def _get_signature_key(aws_secret_key, date_stamp, region, service):
-    """
-    Helper function for AWS signature generation.
-
-    **WARNING: This function is non-functional due to deep call graph issues.**
-    """
-    key_prefix = F.concat(
-        F.lit("AWS4"),
-        aws_secret_key,
+    df = df.withColumn(
+        t("string_to_sign"),
+        F.concat_ws(
+            "\n",
+            F.lit("AWS4-HMAC-SHA256"),
+            F.col(t("amz_date")),
+            F.col(t("credential_scope")),
+            F.col(t("canonical_request_hash")),
+        ),
     )
-    k_date = hmac_sha256(ByteColumn(key_prefix), ByteColumn(date_stamp))
-    k_region = hmac_sha256(k_date, region)
-    k_service = hmac_sha256(k_region, service)
-    signing_key = hmac_sha256(ByteColumn(k_service), ByteColumn(F.lit("aws4_request")))
-    return signing_key
+
+    # Stage 7: Signing key derivation (staged HMAC chain)
+    # All inputs to HMAC must be binary - encode strings as UTF-8
+    df = df.withColumn(
+        t("key_prefix"),
+        _to_binary(F.concat(F.lit("AWS4"), F.col(aws_secret_key_col))),
+    )
+
+    df = df.withColumn(
+        t("date_stamp_bin"),
+        _to_binary(F.col(t("date_stamp"))),
+    )
+
+    df = df.withColumn(
+        t("k_date"),
+        hmac_sha256(
+            ByteColumn(F.col(t("key_prefix"))),
+            ByteColumn(F.col(t("date_stamp_bin"))),
+        ),
+    )
+
+    df = df.withColumn(
+        t("region_bin"),
+        _to_binary(F.col(region_col)),
+    )
+
+    df = df.withColumn(
+        t("k_region"),
+        hmac_sha256(
+            ByteColumn(F.col(t("k_date"))),
+            ByteColumn(F.col(t("region_bin"))),
+        ),
+    )
+
+    df = df.withColumn(
+        t("k_service"),
+        hmac_sha256(
+            ByteColumn(F.col(t("k_region"))),
+            ByteColumn(F.lit(b"s3")),
+        ),
+    )
+
+    df = df.withColumn(
+        t("signing_key"),
+        hmac_sha256(
+            ByteColumn(F.col(t("k_service"))),
+            ByteColumn(F.lit(b"aws4_request")),
+        ),
+    )
+
+    # Stage 8: Final signature
+    df = df.withColumn(
+        t("string_to_sign_bin"),
+        _to_binary(F.col(t("string_to_sign"))),
+    )
+
+    df = df.withColumn(
+        t("signature"),
+        F.hex(
+            hmac_sha256(
+                ByteColumn(F.col(t("signing_key"))),
+                ByteColumn(F.col(t("string_to_sign_bin"))),
+            )
+        ),
+    )
+
+    # Stage 9: Assemble final URL
+    df = df.withColumn(
+        output_col,
+        F.concat(
+            F.col(t("endpoint")),
+            F.lit("?"),
+            F.col(t("canonical_qs")),
+            F.lit("&X-Amz-Signature="),
+            F.lower(F.col(t("signature"))),
+        ),
+    )
+
+    # Clean up intermediate columns
+    temp_cols = [c for c in df.columns if c.startswith(_TEMP_COL_PREFIX)]
+    df = df.drop(*temp_cols)
+
+    return df

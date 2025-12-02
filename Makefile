@@ -1,11 +1,10 @@
-.PHONY: help setup test clean lint format build all test35 test40 lock
+.PHONY: help setup test clean lint format build all test35 test40
 
 
 help:
 	@echo "Available targets:"
 	@echo "  setup            - Install dependencies and setup pre-commit"
 	@echo "  test             - Run all tests"
-	@echo "  test-s3-isolated - Run isolated s3 hanging test (5s timeout)"
 	@echo "  test-reset       - Clean and run tests"
 	@echo "  lint             - Run pre-commit hooks on all files"
 	@echo "  format           - Run formatting tools (ruff)"
@@ -13,6 +12,10 @@ help:
 	@echo "  publish          - Publish the package to PyPI"
 	@echo "  clean            - Clean up temp files and build artifacts"
 	@echo "  all              - Setup and test"
+	@echo "  test35           - Run tests on Spark 3.5.x"
+	@echo "  test40           - Run tests on Spark 4.0.x"
+	@echo "  test-debug       - Run tests with debug mode"
+
 
 
 setup:
@@ -28,11 +31,6 @@ format:
 	uv run ruff format .
 	uv run ruff check .
 
-
-lock:
-	uv lock
-
-
 test: test35 test40
 
 
@@ -42,11 +40,6 @@ test35:
 
 test40:
 	uv run --with "pyspark==4.0.*" pytest -m "not spark35_only" tests/
-
-
-test-s3-isolated:
-	@echo "Running isolated S3 signature test..."
-	@uv run python tests/run_s3_timeout_test.py
 
 
 test-debug:

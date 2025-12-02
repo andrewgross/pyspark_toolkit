@@ -5,7 +5,7 @@ from pyspark.sql.types import IntegerType, StringType, StructField, StructType
 try:
     from pyspark_toolkit.udtf import _as_dict, _parse_schema, fdtf
 except ImportError:
-    pytest.skip("spark4_only not available", allow_module_level=True)
+    pytest.skip("spark40_only not available", allow_module_level=True)
 
 
 # Core Functionality Tests
