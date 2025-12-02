@@ -13,12 +13,12 @@ dev = [
     "psutil>=7.0.0",
     "pytest>=8.4.1",
     "ruff>=0.12.7",
-    "pyspark>=3.5.0",
+    "pyspark",
 ]
 
 [project.optional-dependencies]
 pyspark = [
-    "pyspark>=3.5.0",
+    "pyspark",
 ]
 
 [tool.ruff]

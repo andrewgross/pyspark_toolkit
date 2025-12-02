@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import pyspark
 import pyspark.sql.functions as F
 import pyspark.sql.types as T
+import pytest
 
 from pyspark_toolkit.helpers import chars_to_int, split_last_chars
 from pyspark_toolkit.modulus import (
@@ -10,7 +12,12 @@ from pyspark_toolkit.modulus import (
     partition_by_uuid,
     split_uuid_string_for_id,
 )
-from pyspark_toolkit.types import HexStringColumn, IntegerColumn, StringColumn, UUIDColumn
+from pyspark_toolkit.types import (
+    HexStringColumn,
+    IntegerColumn,
+    StringColumn,
+    UUIDColumn,
+)
 
 
 def test_split_uuid_string_for_id(spark):
@@ -218,7 +225,7 @@ def test_partition_by_uuid_handles_nulls(spark):
     assert rows[0]["label"] == "valid1"  # 57721 % 2 = 1
 
 
-def test_split_uuid_with_malformed_uuid(spark):
+def test_split_uuid_with_malformed_uuid_spark(spark):
     """
     Test that split_uuid_string_for_id handles malformed UUIDs.
     """

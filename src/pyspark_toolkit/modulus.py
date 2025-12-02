@@ -15,7 +15,7 @@ def split_uuid_string_for_id(col: UUIDColumn) -> StringColumn:
     Returns:
         The 5th element of the split UUID string
     """
-    return StringColumn(F.split(col, "-")[4])
+    return StringColumn(F.get(F.split(col, "-"), 4))
 
 
 def extract_id_from_uuid(col: UUIDColumn) -> IntegerColumn:

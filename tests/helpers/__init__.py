@@ -12,13 +12,13 @@ def make_df(d1, d2):
         (d1, d2),
     ]
     spark = SparkSession.builder.getOrCreate()
-    return spark.createDataFrame(data, ['d1', 'd2'])
+    return spark.createDataFrame(data, ["d1", "d2"])
 
 
 def run_column(column_definition, d1, d2):
     df = make_df(d1, d2)
-    df = df.withColumn('result', column_definition)
-    return df.collect()[0]['result']
+    df = df.withColumn("result", column_definition)
+    return df.collect()[0]["result"]
 
 
 def xor_bytes_pad(a: bytes, b: bytes, pad: int = 0) -> bytes:
@@ -39,11 +39,11 @@ def hmac_python(
     digest=hashlib.sha256,
 ) -> str:
     if isinstance(key, str):
-        b1 = bytes(key, 'utf-8')
+        b1 = bytes(key, "utf-8")
     else:
         b1 = key
     if isinstance(message, str):
-        b2 = bytes(message, 'utf-8')
+        b2 = bytes(message, "utf-8")
     else:
         b2 = message
     return hmac.new(b1, b2, digest).hexdigest()
