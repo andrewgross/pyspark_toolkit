@@ -3,7 +3,7 @@ from pyspark.sql import Row
 from pyspark.sql.types import IntegerType, StringType, StructField, StructType
 
 try:
-    from pyspark_toolkit.udtf import _as_dict, fdtf
+    from pyspark_toolkit.udtf import _as_dict, _parse_schema, fdtf
 except ImportError:
     pytest.skip("spark4_only not available", allow_module_level=True)
 
@@ -384,3 +384,195 @@ def test_as_dict_with_dict_like_object(spark):
     assert isinstance(result, dict)
     assert result["id"] == 1
     assert result["name"] == "test"
+
+
+# DDL String Schema Tests
+
+
+@pytest.mark.spark40_only
+def test_parse_schema_with_structtype_returns_same_object(spark):
+    """
+    Test that _parse_schema returns the same StructType when given a StructType.
+    This ensures passthrough behavior for StructType inputs.
+    """
+    # when I have a StructType schema
+    schema = StructType([StructField("col", IntegerType())])
+
+    # and I parse it
+    result = _parse_schema(schema)
+
+    # then I should get the same StructType back
+    assert result is schema
+
+
+@pytest.mark.spark40_only
+def test_parse_schema_with_single_column_ddl_string(spark):
+    """
+    Test that _parse_schema correctly parses a single column DDL string.
+    This ensures basic DDL string parsing works.
+    """
+    # when I have a DDL string with a single column
+    ddl = "doubled INT"
+
+    # and I parse it
+    result = _parse_schema(ddl)
+
+    # then I should get a StructType with the correct field
+    assert isinstance(result, StructType)
+    assert len(result.fields) == 1
+    assert result.fields[0].name == "doubled"
+    assert result.fields[0].dataType == IntegerType()
+
+
+@pytest.mark.spark40_only
+def test_parse_schema_with_multiple_column_ddl_string(spark):
+    """
+    Test that _parse_schema correctly parses a multi-column DDL string.
+    This ensures DDL strings with multiple columns work.
+    """
+    # when I have a DDL string with multiple columns
+    ddl = "col1 INT, col2 STRING"
+
+    # and I parse it
+    result = _parse_schema(ddl)
+
+    # then I should get a StructType with the correct fields
+    assert isinstance(result, StructType)
+    assert len(result.fields) == 2
+    assert result.fields[0].name == "col1"
+    assert result.fields[0].dataType == IntegerType()
+    assert result.fields[1].name == "col2"
+    assert result.fields[1].dataType == StringType()
+
+
+@pytest.mark.spark40_only
+def test_parse_schema_with_invalid_type_raises_typeerror(spark):
+    """
+    Test that _parse_schema raises TypeError for invalid input types.
+    This ensures proper error handling for bad inputs.
+    """
+    # when I try to parse an invalid type
+    # then I should get a TypeError
+    with pytest.raises(TypeError, match="must be a StructType or DDL string"):
+        _parse_schema(123)
+
+
+@pytest.mark.spark40_only
+def test_fdtf_with_ddl_string_schema_appends_columns(spark):
+    """
+    Test that fdtf works correctly with DDL string schema.
+    This ensures end-to-end DDL string support.
+    """
+    # when I have a simple DataFrame
+    df = spark.createDataFrame(
+        [(1, "a"), (2, "b")],
+        ["id", "value"],
+    )
+
+    # and I have an fdtf function with DDL string schema
+    @fdtf(output_schema="doubled INT")
+    def add_doubled(row):
+        yield (row["id"] * 2,)
+
+    # and I apply the function
+    result_df = add_doubled(df)
+    results = result_df.collect()
+
+    # then I should get original columns plus new column
+    assert len(results) == 2
+    assert results[0]["id"] == 1
+    assert results[0]["value"] == "a"
+    assert results[0]["doubled"] == 2
+    assert results[1]["id"] == 2
+    assert results[1]["value"] == "b"
+    assert results[1]["doubled"] == 4
+
+
+@pytest.mark.spark40_only
+def test_fdtf_with_multi_column_ddl_string_schema(spark):
+    """
+    Test that fdtf works with DDL strings defining multiple columns.
+    This ensures multi-column DDL string schemas work.
+    """
+    # when I have a simple DataFrame
+    df = spark.createDataFrame(
+        [(1, "a"), (2, "b")],
+        ["id", "value"],
+    )
+
+    # and I have an fdtf function with multi-column DDL string schema
+    @fdtf(output_schema="doubled INT, upper_value STRING")
+    def transform(row):
+        yield (row["id"] * 2, row["value"].upper())
+
+    # and I apply the function
+    result_df = transform(df)
+    results = result_df.collect()
+
+    # then I should get original columns plus new columns
+    assert len(results) == 2
+    assert results[0]["id"] == 1
+    assert results[0]["value"] == "a"
+    assert results[0]["doubled"] == 2
+    assert results[0]["upper_value"] == "A"
+    assert results[1]["id"] == 2
+    assert results[1]["value"] == "b"
+    assert results[1]["doubled"] == 4
+    assert results[1]["upper_value"] == "B"
+
+
+@pytest.mark.spark40_only
+def test_fdtf_ddl_string_schema_matches_structtype_schema(spark):
+    """
+    Test that fdtf produces identical results with DDL string vs StructType.
+    This ensures schema equivalence between the two formats.
+    """
+    # when I have a simple DataFrame
+    df = spark.createDataFrame(
+        [(1,), (2,)],
+        ["id"],
+    )
+
+    # and I have two fdtf functions with equivalent schemas
+    @fdtf(output_schema="result INT")
+    def with_ddl(row):
+        yield (row["id"] * 10,)
+
+    @fdtf(output_schema=StructType([StructField("result", IntegerType())]))
+    def with_structtype(row):
+        yield (row["id"] * 10,)
+
+    # and I apply both functions
+    ddl_results = with_ddl(df).collect()
+    structtype_results = with_structtype(df).collect()
+
+    # then the results should be identical
+    assert len(ddl_results) == len(structtype_results)
+    for ddl_row, st_row in zip(ddl_results, structtype_results):
+        assert ddl_row["id"] == st_row["id"]
+        assert ddl_row["result"] == st_row["result"]
+
+
+@pytest.mark.spark40_only
+def test_fdtf_ddl_string_output_schema_has_correct_types(spark):
+    """
+    Test that fdtf with DDL string produces correct column types in output.
+    This ensures type information is preserved from DDL parsing.
+    """
+    # when I have a simple DataFrame
+    df = spark.createDataFrame(
+        [(1,)],
+        ["id"],
+    )
+
+    # and I have an fdtf function with DDL string schema
+    @fdtf(output_schema="new_int INT, new_str STRING")
+    def add_columns(row):
+        yield (42, "test")
+
+    # and I apply the function
+    result_df = add_columns(df)
+
+    # then the output schema should have correct types
+    assert result_df.schema["new_int"].dataType == IntegerType()
+    assert result_df.schema["new_str"].dataType == StringType()

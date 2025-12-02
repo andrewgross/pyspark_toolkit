@@ -1,11 +1,11 @@
 import json
 import uuid
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Union
 
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import udtf
-from pyspark.sql.types import StructType
+from pyspark.sql.types import DataType, StructType
 from pyspark.sql.udtf import AnalyzeArgument, AnalyzeResult
 
 RowDict = Dict[str, Any]
@@ -16,7 +16,36 @@ def _as_dict(r):
     return r.asDict(recursive=True) if hasattr(r, "asDict") else dict(r)
 
 
-def fdtf(*, output_schema: StructType, with_single_partition: bool = False):
+def _parse_schema(schema: Union[StructType, str]) -> StructType:
+    """
+    Parse a schema from either a StructType or a DDL-formatted string.
+
+    Args:
+        schema: Either a StructType object or a DDL string like "col1 INT, col2 STRING"
+
+    Returns:
+        A StructType representing the schema
+
+    Raises:
+        TypeError: If the schema is not a StructType or string
+        ValueError: If the DDL string does not parse to a StructType
+    """
+    if isinstance(schema, StructType):
+        return schema
+
+    if isinstance(schema, str):
+        parsed = DataType.fromDDL(schema)
+        if not isinstance(parsed, StructType):
+            raise ValueError(
+                f"Schema DDL must define a struct type, got {type(parsed).__name__}. "
+                f"Use format like 'col1 INT, col2 STRING' for multiple columns."
+            )
+        return parsed
+
+    raise TypeError(f"output_schema must be a StructType or DDL string, got {type(schema).__name__}")
+
+
+def fdtf(*, output_schema: Union[StructType, str], with_single_partition: bool = False):
     """
     Decorator for flexible UDTFs that append new columns to the input DataFrame.
 
@@ -28,7 +57,12 @@ def fdtf(*, output_schema: StructType, with_single_partition: bool = False):
         @fdtf(output_schema=StructType([...]))
         def fn(row, *args, **kwargs): ...
         result = fn(df, "foo", 123, named="bar")
+
+    The output_schema parameter accepts either:
+        - A StructType object: StructType([StructField("col", IntegerType())])
+        - A DDL string: "col INT" or "col1 INT, col2 STRING"
     """
+    parsed_schema = _parse_schema(output_schema)
 
     def _decorate(fn: RowFn) -> Callable:
         def _runner(input_df: DataFrame, *args: Any, **kwargs: Any) -> DataFrame:
@@ -52,7 +86,7 @@ def fdtf(*, output_schema: StructType, with_single_partition: bool = False):
                 def analyze(table: AnalyzeArgument) -> AnalyzeResult:
                     if not table.isTable:
                         raise Exception("First argument must be TABLE(...)")
-                    combined = StructType(list(base_schema.fields) + list(output_schema.fields))
+                    combined = StructType(list(base_schema.fields) + list(parsed_schema.fields))
                     return _Analyze(schema=combined, withSinglePartition=with_single_partition)
 
                 def eval(self, row):
