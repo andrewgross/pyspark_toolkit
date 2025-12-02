@@ -17,6 +17,7 @@ from pyspark_toolkit.json import map_json_column
 from pyspark_toolkit.modulus import partition_by_uuid
 from pyspark_toolkit.xor import xor
 from pyspark_toolkit.helpers import map_concat
+from pyspark_toolkit.s3 import generate_presigned_url
 
 # Your PySpark code here
 ```
@@ -191,6 +192,46 @@ df = spark.createDataFrame([
 df = df.withColumn("hmac", hmac_sha256(F.col("key"), F.col("message")))
 ```
 
+### S3 Presigned URLs
+
+Generate AWS S3 presigned URLs for secure, time-limited access to S3 objects using AWS Signature Version 4:
+
+```python
+from pyspark_toolkit.s3 import generate_presigned_url
+
+# Create DataFrame with S3 object information and credentials
+df = spark.createDataFrame([
+    ("my-bucket", "path/to/file.txt", "AKIAIOSFODNN7EXAMPLE",
+     "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", "us-east-1", 3600),
+    ("my-bucket", "another/file.pdf", "AKIAIOSFODNN7EXAMPLE",
+     "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", "us-east-1", 7200),
+], ["bucket", "key", "access_key", "secret_key", "region", "expiration"])
+
+# Generate presigned URLs for each row
+result = generate_presigned_url(
+    df,
+    bucket_col="bucket",
+    key_col="key",
+    aws_access_key_col="access_key",
+    aws_secret_key_col="secret_key",
+    region_col="region",
+    expiration_col="expiration",
+)
+# Result: DataFrame with new "presigned_url" column containing signed URLs
+
+# Custom output column name
+result = generate_presigned_url(
+    df,
+    bucket_col="bucket",
+    key_col="key",
+    aws_access_key_col="access_key",
+    aws_secret_key_col="secret_key",
+    region_col="region",
+    expiration_col="expiration",
+    output_col="signed_url",
+)
+```
+
 ## Available Functions
 
 ### UUID Operations
@@ -214,6 +255,9 @@ df = df.withColumn("hmac", hmac_sha256(F.col("key"), F.col("message")))
 - `xor_word()` - XOR for short strings (≤8 chars) returning integer
 - `hmac_sha256()` - HMAC-SHA256 hash generation
 
+### S3 Operations
+- `generate_presigned_url()` - Generate AWS S3 presigned URLs using Signature Version 4
+
 ### Map Operations
 - `map_concat()` - Concatenate multiple map columns with right-override merge strategy
 
@@ -228,8 +272,4 @@ df = df.withColumn("hmac", hmac_sha256(F.col("key"), F.col("message")))
 ## Compatibility
 
 - Python 3.9+
-- PySpark 3.5+ (tested with 3.5.4 and 4.0)
-
-## Known Issues
-
-See [KNOWN_ISSUES.md](KNOWN_ISSUES.md) for information about deprecated modules.
+- PySpark 3.5+ (tested with 3.5 and 4.0) - UDTF code is not supported for PySpark<4.0

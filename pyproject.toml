@@ -38,7 +38,6 @@ package-dir = { "" = "src" }
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["pyspark_toolkit*"]
-exclude = ["pyspark_toolkit.s3"]
 
 [tool.setuptools.dynamic]
 version = { attr = "pyspark_toolkit.__version__" }
