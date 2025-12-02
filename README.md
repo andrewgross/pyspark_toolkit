@@ -8,6 +8,10 @@ A collection of useful PySpark utility functions for data processing, including 
 pip install pyspark-toolkit
 ```
 
+```
+uv add pyspark-toolkit
+```
+
 ## Quick Start
 
 ```python
@@ -18,6 +22,7 @@ from pyspark_toolkit.modulus import partition_by_uuid
 from pyspark_toolkit.xor import xor
 from pyspark_toolkit.helpers import map_concat
 from pyspark_toolkit.s3 import generate_presigned_url
+from pyspark_toolkit.udtf import fdtf  # PySpark 4.0+ only
 
 # Your PySpark code here
 ```
@@ -232,6 +237,64 @@ result = generate_presigned_url(
 )
 ```
 
+### Flexible DataFrame Table Functions (FDTF)
+
+Create User-Defined Table Functions that append columns to DataFrames with a simple decorator syntax. Requires PySpark 4.0+.
+
+```python
+from pyspark_toolkit.udtf import fdtf
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType
+
+# Basic usage: add a computed column
+@fdtf(output_schema="doubled INT")
+def add_doubled(row):
+    yield (row["id"] * 2,)
+
+df = spark.createDataFrame([(1, "a"), (2, "b")], ["id", "value"])
+result = add_doubled(df)
+# Result: id=1, value="a", doubled=2
+#         id=2, value="b", doubled=4
+
+# Multiple output columns using DDL string
+@fdtf(output_schema="doubled INT, upper_value STRING")
+def transform(row):
+    yield (row["id"] * 2, row["value"].upper())
+
+result = transform(df)
+# Result: id=1, value="a", doubled=2, upper_value="A"
+
+# Using StructType for output schema
+@fdtf(output_schema=StructType([
+    StructField("computed", IntegerType()),
+    StructField("label", StringType()),
+]))
+def compute(row):
+    yield (row["id"] + 100, f"item_{row['id']}")
+
+# Pass arguments to the function
+@fdtf(output_schema="result INT")
+def add_with_args(row, multiplier, offset=0):
+    yield (row["id"] * multiplier + offset,)
+
+result = add_with_args(df, 10, offset=5)
+# Result: id=1, value="a", result=15  (1 * 10 + 5)
+#         id=2, value="b", result=25  (2 * 10 + 5)
+
+# Yield multiple rows per input (explode behavior)
+@fdtf(output_schema="iteration INT")
+def explode_rows(row):
+    for i in range(row["id"]):
+        yield (i,)
+
+result = explode_rows(df)
+# Input row with id=2 produces 2 output rows (iteration=0, iteration=1)
+
+# Use with_single_partition for operations requiring all data in one partition
+@fdtf(output_schema="rank INT", with_single_partition=True)
+def add_rank(row):
+    yield (1,)  # In practice, you'd compute rank across all rows
+```
+
 ## Available Functions
 
 ### UUID Operations
@@ -257,6 +320,9 @@ result = generate_presigned_url(
 
 ### S3 Operations
 - `generate_presigned_url()` - Generate AWS S3 presigned URLs using Signature Version 4
+
+### UDTF Helpers (PySpark 4.0+)
+- `fdtf()` - Decorator for creating flexible UDTFs that append columns to DataFrames
 
 ### Map Operations
 - `map_concat()` - Concatenate multiple map columns with right-override merge strategy
