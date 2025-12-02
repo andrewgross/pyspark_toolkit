@@ -1,8 +1,6 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
-
-## [Unreleased]
+## [2025-12-02] - Version 0.5.0
 
 ### Features
 
@@ -15,6 +13,7 @@ All notable changes to this project will be documented in this file.
 
 ### Documentation
 
+- **UDTF/FDTF Documentation**: Added comprehensive documentation for User-Defined Table Functions (UDTF) and Fixed-Dimensional Table Functions (FDTF), including examples and best practices. (bed3928)
 - **S3 Examples**: Added comprehensive S3 presigned URL generation examples to README, including function reference and usage patterns. (f200957)
 - **Known Issues Removed**: Removed KNOWN_ISSUES.md file as there are no longer any known issues with the toolkit. (f200957)
 
