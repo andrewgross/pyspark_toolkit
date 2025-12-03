@@ -56,7 +56,7 @@ def test_fdtf_preserves_all_input_columns_and_values(spark):
 
     # and I have an fdtf function that adds a new column
     @fdtf(output_schema=StructType([StructField("flag", StringType())]))
-    def add_flag(row):
+    def add_flag(row):  # noqa: ARG001
         yield ("ok",)
 
     # and I apply the function
@@ -230,7 +230,7 @@ def test_fdtf_output_schema_matches_specification(spark):
     )
 
     @fdtf(output_schema=output_schema)
-    def add_columns(row):
+    def add_columns(row):  # noqa: ARG001
         yield (42, "test")
 
     # and I apply the function
@@ -260,7 +260,7 @@ def test_fdtf_function_yielding_multiple_rows_per_input(spark):
 
     # and I have an fdtf function that yields multiple rows
     @fdtf(output_schema=StructType([StructField("iteration", IntegerType())]))
-    def explode_rows(row):
+    def explode_rows(row):  # noqa: ARG001
         for i in range(3):
             yield (i,)
 
@@ -297,7 +297,7 @@ def test_fdtf_with_empty_dataframe(spark):
 
     # and I have an fdtf function
     @fdtf(output_schema=StructType([StructField("result", IntegerType())]))
-    def process(row):
+    def process(row):  # noqa: ARG001
         yield (42,)
 
     # and I apply the function
@@ -349,7 +349,7 @@ def test_fdtf_with_null_values_in_input(spark):
 
 
 @pytest.mark.spark40_only
-def test_as_dict_with_pyspark_row(spark):
+def test_as_dict_with_pyspark_row():
     """
     Test that _as_dict converts PySpark Row to dict recursively.
     This ensures Row conversion works correctly.
@@ -369,7 +369,7 @@ def test_as_dict_with_pyspark_row(spark):
 
 
 @pytest.mark.spark40_only
-def test_as_dict_with_dict_like_object(spark):
+def test_as_dict_with_dict_like_object():
     """
     Test that _as_dict handles dict-like objects without asDict method.
     This ensures compatibility with dict-like objects.
@@ -390,7 +390,7 @@ def test_as_dict_with_dict_like_object(spark):
 
 
 @pytest.mark.spark40_only
-def test_parse_schema_with_structtype_returns_same_object(spark):
+def test_parse_schema_with_structtype_returns_same_object():
     """
     Test that _parse_schema returns the same StructType when given a StructType.
     This ensures passthrough behavior for StructType inputs.
@@ -406,7 +406,7 @@ def test_parse_schema_with_structtype_returns_same_object(spark):
 
 
 @pytest.mark.spark40_only
-def test_parse_schema_with_single_column_ddl_string(spark):
+def test_parse_schema_with_single_column_ddl_string():
     """
     Test that _parse_schema correctly parses a single column DDL string.
     This ensures basic DDL string parsing works.
@@ -425,7 +425,7 @@ def test_parse_schema_with_single_column_ddl_string(spark):
 
 
 @pytest.mark.spark40_only
-def test_parse_schema_with_multiple_column_ddl_string(spark):
+def test_parse_schema_with_multiple_column_ddl_string():
     """
     Test that _parse_schema correctly parses a multi-column DDL string.
     This ensures DDL strings with multiple columns work.
@@ -446,7 +446,7 @@ def test_parse_schema_with_multiple_column_ddl_string(spark):
 
 
 @pytest.mark.spark40_only
-def test_parse_schema_with_invalid_type_raises_typeerror(spark):
+def test_parse_schema_with_invalid_type_raises_typeerror():
     """
     Test that _parse_schema raises TypeError for invalid input types.
     This ensures proper error handling for bad inputs.
@@ -454,7 +454,7 @@ def test_parse_schema_with_invalid_type_raises_typeerror(spark):
     # when I try to parse an invalid type
     # then I should get a TypeError
     with pytest.raises(TypeError, match="must be a StructType or DDL string"):
-        _parse_schema(123)
+        _parse_schema(123)  # type: ignore[arg-type]
 
 
 @pytest.mark.spark40_only
@@ -567,7 +567,7 @@ def test_fdtf_ddl_string_output_schema_has_correct_types(spark):
 
     # and I have an fdtf function with DDL string schema
     @fdtf(output_schema="new_int INT, new_str STRING")
-    def add_columns(row):
+    def add_columns(row):  # noqa: ARG001
         yield (42, "test")
 
     # and I apply the function
@@ -576,3 +576,114 @@ def test_fdtf_ddl_string_output_schema_has_correct_types(spark):
     # then the output schema should have correct types
     assert result_df.schema["new_int"].dataType == IntegerType()
     assert result_df.schema["new_str"].dataType == StringType()
+
+
+# Single Value Return Tests
+
+
+@pytest.mark.spark40_only
+def test_fdtf_with_single_value_return(spark):
+    """
+    Test that fdtf handles single value returns without explicit tuple wrapping.
+    This ensures users can return a single value directly.
+    """
+    # when I have a simple DataFrame
+    df = spark.createDataFrame(
+        [(1,), (2,), (3,)],
+        ["id"],
+    )
+
+    # and I have an fdtf function that returns a single value (not a tuple)
+    @fdtf(output_schema="doubled INT")
+    def double_value(row):
+        yield row["id"] * 2  # returns int, not (int,)
+
+    # and I apply the function
+    result_df = double_value(df)
+    results = sorted(result_df.collect(), key=lambda r: r["id"])
+
+    # then it should work correctly
+    assert len(results) == 3
+    assert results[0]["doubled"] == 2
+    assert results[1]["doubled"] == 4
+    assert results[2]["doubled"] == 6
+
+
+@pytest.mark.spark40_only
+def test_fdtf_with_single_string_value_return(spark):
+    """
+    Test that fdtf handles single string value returns.
+    This ensures string values are wrapped correctly.
+    """
+    # when I have a simple DataFrame
+    df = spark.createDataFrame(
+        [(1, "hello"), (2, "world")],
+        ["id", "value"],
+    )
+
+    # and I have an fdtf function that returns a single string value
+    @fdtf(output_schema="upper STRING")
+    def upper_value(row):
+        yield row["value"].upper()  # returns str, not (str,)
+
+    # and I apply the function
+    result_df = upper_value(df)
+    results = sorted(result_df.collect(), key=lambda r: r["id"])
+
+    # then it should work correctly
+    assert results[0]["upper"] == "HELLO"
+    assert results[1]["upper"] == "WORLD"
+
+
+@pytest.mark.spark40_only
+def test_fdtf_with_tuple_return_still_works(spark):
+    """
+    Test that fdtf still works with explicit tuple returns.
+    This ensures backwards compatibility with tuple returns.
+    """
+    # when I have a simple DataFrame
+    df = spark.createDataFrame(
+        [(1,), (2,)],
+        ["id"],
+    )
+
+    # and I have an fdtf function that returns an explicit tuple
+    @fdtf(output_schema="doubled INT")
+    def double_value(row):
+        yield (row["id"] * 2,)  # explicit tuple
+
+    # and I apply the function
+    result_df = double_value(df)
+    results = sorted(result_df.collect(), key=lambda r: r["id"])
+
+    # then it should work correctly
+    assert results[0]["doubled"] == 2
+    assert results[1]["doubled"] == 4
+
+
+@pytest.mark.spark40_only
+def test_fdtf_with_multi_column_tuple_return(spark):
+    """
+    Test that fdtf correctly handles multi-column tuple returns.
+    This ensures tuple returns with multiple values work.
+    """
+    # when I have a simple DataFrame
+    df = spark.createDataFrame(
+        [(1, "a"), (2, "b")],
+        ["id", "value"],
+    )
+
+    # and I have an fdtf function that returns multiple columns
+    @fdtf(output_schema="doubled INT, upper STRING")
+    def transform(row):
+        yield (row["id"] * 2, row["value"].upper())
+
+    # and I apply the function
+    result_df = transform(df)
+    results = sorted(result_df.collect(), key=lambda r: r["id"])
+
+    # then both columns should be populated correctly
+    assert results[0]["doubled"] == 2
+    assert results[0]["upper"] == "A"
+    assert results[1]["doubled"] == 4
+    assert results[1]["upper"] == "B"
