@@ -1,5 +1,29 @@
 # Changelog
 
+## [2025-12-03] - Version 0.6.0
+
+### Features
+
+- **Concurrent Row Processing**: FDTF decorator now supports concurrent processing with configurable thread pool using the max_workers parameter, enabling parallel execution of row transformations for improved performance. (73c4c4e, 94f54f5)
+- **Resource Management**: Added init_fn and cleanup_fn parameters to FDTF for lifecycle management of resources (HTTP clients, database connections, etc.) that are initialized once per partition and properly cleaned up. (73c4c4e, 94f54f5)
+- **Retry Logic**: Implemented automatic retry mechanism with configurable max_retries parameter, allowing functions to automatically retry failed operations with exponential backoff. (73c4c4e, 94f54f5)
+- **Execution Metadata Tracking**: Added metadata_column parameter that automatically tracks execution attempts, timestamps, durations, and errors for each row transformation, providing visibility into processing behavior. (73c4c4e, 94f54f5)
+
+### Enhancements
+
+- **Flexible Return Types**: FDTF functions can now return single values, tuples, or generators - the decorator automatically normalizes all return types for consistent handling. (94f54f5)
+- **Context Object Support**: FDTF functions can now optionally receive a context object (self) as the first parameter to access resources initialized by init_fn, enabling stateful row processing. (94f54f5)
+- **Improved Type Signatures**: Enhanced type hints and validation for FDTF decorator parameters and function signatures for better IDE support and error messages. (94f54f5)
+
+### Documentation
+
+- **FDTF Examples**: Added comprehensive examples demonstrating resource management, retry logic, metadata tracking, and concurrent processing patterns to README. (6bd4b03)
+
+### Internal
+
+- **Test Coverage**: Expanded test suite with comprehensive coverage for concurrent execution, retry behavior, resource lifecycle, and error handling scenarios. (73c4c4e, 94f54f5)
+- **Code Consolidation**: Unified CDTF and FDTF implementations under a single consistent API, simplifying the codebase while maintaining backward compatibility. (94f54f5)
+
 ## [2025-12-02] - Version 0.5.0
 
 ### Features
