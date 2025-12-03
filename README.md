@@ -293,6 +293,47 @@ result = explode_rows(df)
 @fdtf(output_schema="rank INT", with_single_partition=True)
 def add_rank(row):
     yield (1,)  # In practice, you'd compute rank across all rows
+
+# Resource management with init_fn/cleanup_fn
+def init_resources(ctx):
+    import httpx
+    ctx.http = httpx.Client(timeout=30)
+
+def cleanup_resources(ctx):
+    ctx.http.close()
+
+@fdtf(
+    output_schema="response STRING",
+    init_fn=init_resources,
+    cleanup_fn=cleanup_resources,
+    max_workers=10,
+)
+def fetch_data(self, row):
+    resp = self.http.get(f"https://api.example.com/{row['id']}")
+    return (resp.text,)
+
+result = fetch_data(df)
+
+# Retry logic and metadata tracking
+@fdtf(
+    output_schema="result STRING",
+    max_retries=3,  # Retry up to 3 times on failure
+    metadata_column="_attempts",  # Custom metadata column name
+)
+def flaky_operation(row):
+    return (process(row["data"]),)
+
+result = flaky_operation(df)
+# result contains: original columns + result + _attempts column
+# _attempts is an array of: [{attempt: 1, started_at: ..., duration_ms: ..., error: null}]
+
+# Disable metadata tracking for simpler output
+@fdtf(output_schema="doubled INT", metadata_column=None)
+def simple_double(row):
+    return (row["id"] * 2,)
+
+result = simple_double(df)
+# result contains only: original columns + doubled (no metadata)
 ```
 
 ## Available Functions

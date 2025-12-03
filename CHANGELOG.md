@@ -13,7 +13,7 @@
 
 ### Documentation
 
-- **UDTF/FDTF Documentation**: Added comprehensive documentation for User-Defined Table Functions (UDTF) and Fixed-Dimensional Table Functions (FDTF), including examples and best practices. (bed3928)
+- **UDTF/FDTF Documentation**: Added comprehensive documentation for User-Defined Table Functions (UDTF) and Flexible DataFrame Table Functions (FDTF), including examples and best practices. (bed3928)
 - **S3 Examples**: Added comprehensive S3 presigned URL generation examples to README, including function reference and usage patterns. (f200957)
 - **Known Issues Removed**: Removed KNOWN_ISSUES.md file as there are no longer any known issues with the toolkit. (f200957)
 
