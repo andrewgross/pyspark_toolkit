@@ -1,14 +1,18 @@
+import inspect
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from types import GeneratorType
 from typing import (
     Any,
     Callable,
     Concatenate,
     Dict,
+    Generator,
     Iterable,
+    Iterator,
     List,
     Optional,
     ParamSpec,
@@ -43,8 +47,56 @@ RowFn = Callable[..., Iterable[Tuple[Any, ...]]]
 ConcurrentRowFn = Callable[..., Tuple[Any, ...] | Any]
 AttemptRecord = Tuple[int, datetime, int, Optional[str]]
 
-# Default column name for cdtf metadata
+# Default column name for fdtf metadata
 DEFAULT_METADATA_COLUMN = "_metadata"
+
+
+def _validate_fdtf_signature(fn: Callable, has_init_fn: bool) -> bool:
+    """Validate the function signature and determine if it uses context.
+
+    Args:
+        fn: The decorated function
+        has_init_fn: Whether init_fn was provided to fdtf
+
+    Returns:
+        True if function expects context (self) as first param, False otherwise
+
+    Raises:
+        TypeError: If the signature is invalid for the given configuration
+    """
+    sig = inspect.signature(fn)
+    params = [
+        p
+        for p in sig.parameters.values()
+        if p.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+    ]
+    num_params = len(params)
+
+    if num_params == 0:
+        raise TypeError(
+            f"Function '{fn.__name__}' must accept at least a 'row' parameter. "
+            f"Expected signature: def {fn.__name__}(row, ...) or def {fn.__name__}(self, row, ...)"
+        )
+
+    if has_init_fn:
+        if num_params < 2:
+            raise TypeError(
+                f"When using init_fn, function '{fn.__name__}' must accept 'self' as the first parameter "
+                f"to access initialized resources. "
+                f"Expected signature: def {fn.__name__}(self, row, ...)"
+            )
+        return True  # Uses context
+
+    # No init_fn - check first param name to determine intent
+    first_param_name = params[0].name
+    if first_param_name == "self":
+        # User explicitly wants context even without init_fn
+        return True
+    elif num_params >= 1:
+        # Assume first param is row
+        return False
+
+    return False
 
 
 def _build_metadata_schema(column_name: str) -> StructField:
@@ -85,6 +137,26 @@ def _ensure_tuple(value: Any) -> Tuple[Any, ...]:
     return (value,)
 
 
+def _is_generator(value: Any) -> bool:
+    """Check if value is a generator or iterator (but not a string or other iterable)."""
+    return isinstance(value, (GeneratorType, Iterator)) and not isinstance(value, (str, bytes))
+
+
+def _normalize_result(value: Any) -> Iterable[Tuple[Any, ...]]:
+    """Normalize a function result to an iterable of tuples.
+
+    Handles:
+    - Generator/iterator: yields each item as a tuple
+    - Single value: yields one tuple
+    - Tuple: yields it as-is (single result)
+    """
+    if _is_generator(value):
+        for item in value:
+            yield _ensure_tuple(item)
+    else:
+        yield _ensure_tuple(value)
+
+
 def _parse_schema(schema: Union[StructType, str]) -> StructType:
     """
     Parse a schema from either a StructType or a DDL-formatted string.
@@ -114,99 +186,9 @@ def _parse_schema(schema: Union[StructType, str]) -> StructType:
     raise TypeError(f"output_schema must be a StructType or DDL string, got {type(schema).__name__}")
 
 
-def fdtf(
-    *, output_schema: Union[StructType, str], with_single_partition: bool = False
-) -> Callable[[Callable[Concatenate[RowDict, P], Iterable[R]]], DataFrameTransformer[P]]:
+class FdtfContext:
     """
-    Decorator for flexible UDTFs that append new columns to the input DataFrame.
-
-    Your function should expect `row` as the first argument, which is a dict of the values for the current row.
-
-    The return from this function will incorporate all of the existing row values plus any values returned from your function.
-
-    Supports both *args and **kwargs at call time:
-        @fdtf(output_schema=StructType([...]))
-        def fn(row, *args, **kwargs): ...
-        result = fn(df, "foo", 123, named="bar")
-
-    The output_schema parameter accepts either:
-        - A StructType object: StructType([StructField("col", IntegerType())])
-        - A DDL string: "col INT" or "col1 INT, col2 STRING"
-    """
-    parsed_schema = _parse_schema(output_schema)
-
-    def _decorate(fn: Callable[Concatenate[RowDict, P], Iterable[R]]) -> DataFrameTransformer[P]:
-        def _runner(input_df: DataFrame, *args: Any, **kwargs: Any) -> DataFrame:
-            base_schema: StructType = input_df.schema
-            base_cols: List[str] = [f.name for f in base_schema.fields]
-
-            # Generate placeholder names for positional args
-            arg_names = [f"_arg{i}" for i in range(len(args))]
-            kwarg_names = list(kwargs.keys())
-
-            @dataclass
-            class _Analyze(AnalyzeResult):
-                pass
-
-            @udtf
-            class _AppendColsUDTF:
-                def __init__(self, analyze_result: Optional[AnalyzeResult] = None):
-                    pass
-
-                @staticmethod
-                def analyze(table: AnalyzeArgument) -> AnalyzeResult:
-                    if not table.isTable:
-                        raise Exception("First argument must be TABLE(...)")
-                    combined = StructType(list(base_schema.fields) + list(parsed_schema.fields))
-                    return _Analyze(schema=combined, withSinglePartition=with_single_partition)
-
-                def eval(self, row):
-                    d = _as_dict(row)
-                    arg_vals = [d.get(a) for a in arg_names]
-                    kw_vals = {k: d.get(k) for k in kwarg_names}
-                    base_vals = tuple(d.get(c) for c in base_cols)
-                    # always call with both *args and **kwargs
-                    for out in fn(d, *arg_vals, **kw_vals):  # type: ignore[call-arg]
-                        yield base_vals + _ensure_tuple(out)
-
-            fn_name = f"udtf_{str(uuid.uuid4()).replace('-', '')}"
-            input_df.sparkSession.udtf.register(fn_name, _AppendColsUDTF)  # type: ignore
-
-            table_uuid = f"table_{str(uuid.uuid4()).replace('-', '')}"
-            input_df.createOrReplaceTempView(table_uuid)
-
-            # Build arg/kwarg projections using named bindings
-            # e.g. ":_arg0 AS _arg0, :name AS name"
-            all_arg_names = arg_names + kwarg_names
-            all_placeholders = [f":{n} AS {n}" for n in all_arg_names]
-            proj = ",\n".join(all_placeholders)
-            proj = (proj + ",\n") if proj else ""
-
-            sql = f"""
-              SELECT *
-              FROM {fn_name}(
-                TABLE(
-                  SELECT
-                    {proj}*
-                  FROM {table_uuid}
-                )
-              )
-            """
-            # bind all args + kwargs into a single dict
-            args_dict = {n: v for n, v in zip(arg_names, args)}
-            args_dict.update(kwargs)
-            return input_df.sparkSession.sql(sql, args=args_dict)
-
-        _runner.__name__ = getattr(fn, "__name__", "fdtf_runner")
-        _runner.__doc__ = fn.__doc__
-        return cast(DataFrameTransformer[P], _runner)
-
-    return _decorate
-
-
-class CdtfContext:
-    """
-    Context object passed to cdtf functions.
+    Context object passed to fdtf functions.
 
     Your init_fn should set attributes on this object, which will then be
     accessible in your processing function via self.
@@ -219,7 +201,7 @@ class CdtfContext:
         def my_cleanup(self):
             self.http.close()
 
-        @cdtf(...)
+        @fdtf(...)
         def call_api(self, row, api_key):
             return (self.api_client.call(row["input"], key=api_key),)
     """
@@ -227,18 +209,18 @@ class CdtfContext:
     pass
 
 
-def cdtf(
+def fdtf(
     *,
     output_schema: Union[StructType, str],
-    init_fn: Optional[Callable[["CdtfContext"], None]] = None,
-    cleanup_fn: Optional[Callable[["CdtfContext"], None]] = None,
+    init_fn: Optional[Callable[["FdtfContext"], None]] = None,
+    cleanup_fn: Optional[Callable[["FdtfContext"], None]] = None,
     max_workers: Optional[int] = 20,
     max_retries: int = 0,
-    metadata_column: str = DEFAULT_METADATA_COLUMN,
+    metadata_column: Optional[str] = DEFAULT_METADATA_COLUMN,
     with_single_partition: bool = False,
-) -> Callable[[Callable[Concatenate["CdtfContext", RowDict, P], R]], DataFrameTransformer[P]]:
+) -> Callable[[Callable[Concatenate["FdtfContext", RowDict, P], R]], DataFrameTransformer[P]]:
     """
-    DataFrame Table Function - processes rows with optional concurrency using a thread pool.
+    Flexible DataFrame Table Function - processes rows with optional concurrency using a thread pool.
 
     This decorator wraps a function that processes individual rows. It can run concurrently
     with a thread pool, or sequentially when max_workers is None or 0. It handles retries
@@ -257,17 +239,27 @@ def cdtf(
 
     Args:
         output_schema: Schema for output columns (StructType or DDL string like "col1 INT, col2 STRING")
-        init_fn: Optional. Called once per partition to initialize resources. Receives a CdtfContext
+        init_fn: Optional. Called once per partition to initialize resources. Receives a FdtfContext
                  object - set attributes on it (e.g., self.http = httpx.Client()).
-        cleanup_fn: Optional. Called in terminate() to close resources. Receives the same CdtfContext.
+        cleanup_fn: Optional. Called in terminate() to close resources. Receives the same FdtfContext.
         max_workers: Thread pool size per partition (default: 20). Set to None or 0 for sequential
                      execution without threading.
         max_retries: Number of retry attempts on failure (default: 0, no retries)
-        metadata_column: Name for the metadata column (default: "_metadata")
+        metadata_column: Name for the metadata column (default: "_metadata"). Set to None to
+                         disable metadata tracking entirely.
         with_single_partition: Force all data to single partition (default: False)
 
-    Your function signature should be:
-        def fn(self: CdtfContext, row: dict, *args, **kwargs) -> tuple
+    Function signatures:
+        - With init_fn: def fn(self: FdtfContext, row: dict, *args, **kwargs) -> tuple
+        - Without init_fn: def fn(row: dict, *args, **kwargs) -> tuple
+
+    When init_fn is provided, your function MUST accept 'self' as the first parameter
+    to access initialized resources. Without init_fn, 'self' is optional.
+
+    Return values:
+        - Single value: return value  (wrapped in tuple automatically)
+        - Tuple: return (val1, val2)  (used as-is)
+        - Generator: yield (val1,); yield (val2,)  (multiple output rows per input)
 
     Example with init/cleanup and concurrency:
         def my_init(self):
@@ -277,7 +269,7 @@ def cdtf(
         def my_cleanup(self):
             self.http.close()
 
-        @cdtf(
+        @fdtf(
             output_schema="result STRING, score FLOAT",
             init_fn=my_init,
             cleanup_fn=my_cleanup,
@@ -290,21 +282,26 @@ def cdtf(
 
         result_df = call_api(input_df, api_key="secret")
 
-    Example without concurrency (sequential execution):
-        @cdtf(output_schema="doubled INT", max_workers=None)
-        def double_value(self, row):
+    Example without init_fn (simple signature):
+        @fdtf(output_schema="doubled INT", max_workers=None)
+        def double_value(row):
             return (row["value"] * 2,)
 
         result_df = double_value(input_df)
     """
     parsed_schema = _parse_schema(output_schema)
+    has_init_fn = init_fn is not None
+    include_metadata = metadata_column is not None
 
-    # Build the full output schema: user schema + metadata (array of attempts)
-    cdtf_meta_fields = [
-        _build_metadata_schema(metadata_column),
-    ]
+    # Build the full output schema: user schema + metadata (array of attempts) if enabled
+    fdtf_meta_fields: List[StructField] = []
+    if include_metadata:
+        fdtf_meta_fields = [_build_metadata_schema(metadata_column)]
 
-    def _decorate(fn: Callable[Concatenate["CdtfContext", RowDict, P], R]) -> DataFrameTransformer[P]:
+    def _decorate(fn: Callable[..., R]) -> DataFrameTransformer[P]:
+        # Validate signature and determine if function uses context
+        uses_context = _validate_fdtf_signature(fn, has_init_fn)
+
         def _runner(input_df: DataFrame, *args: Any, **kwargs: Any) -> DataFrame:
             base_schema: StructType = input_df.schema
             base_cols: List[str] = [f.name for f in base_schema.fields]
@@ -320,6 +317,8 @@ def cdtf(
             captured_max_retries = max_retries
             captured_max_workers = max_workers
             captured_fn = fn
+            captured_uses_context = uses_context
+            captured_include_metadata = include_metadata
             num_user_output_cols = len(user_output_cols)
 
             @dataclass
@@ -327,9 +326,9 @@ def cdtf(
                 pass
 
             @udtf
-            class _ConcurrentUDTF:
+            class _FdtfUDTF:
                 def __init__(self, analyze_result: Optional[AnalyzeResult] = None):
-                    self.ctx = CdtfContext()
+                    self.ctx = FdtfContext()
                     if captured_init_fn is not None:
                         captured_init_fn(self.ctx)
 
@@ -345,7 +344,7 @@ def cdtf(
                 def analyze(table: AnalyzeArgument) -> AnalyzeResult:
                     if not table.isTable:
                         raise Exception("First argument must be TABLE(...)")
-                    combined = StructType(list(base_schema.fields) + list(parsed_schema.fields) + cdtf_meta_fields)
+                    combined = StructType(list(base_schema.fields) + list(parsed_schema.fields) + fdtf_meta_fields)
                     return _Analyze(schema=combined, withSinglePartition=with_single_partition)
 
                 def _execute_with_retry(
@@ -353,11 +352,14 @@ def cdtf(
                     row_dict: Dict[str, Any],
                     arg_vals: List[Any],
                     kw_vals: Dict[str, Any],
-                ) -> Tuple[Optional[Tuple[Any, ...]], List[AttemptRecord]]:
+                ) -> Tuple[Optional[List[Tuple[Any, ...]]], List[AttemptRecord]]:
                     """Execute the function with optional retry logic.
 
-                    Returns: (result_tuple or None, list of attempt records)
+                    Returns: (list of result tuples or None, list of attempt records)
                     Each attempt record is (attempt, started_at, duration_ms, error)
+
+                    Supports both single returns and generators - generators yield multiple
+                    result tuples, single returns yield one.
                     """
                     max_attempts = captured_max_retries + 1
                     attempts: List[AttemptRecord] = []
@@ -367,12 +369,18 @@ def cdtf(
                         start_time = time.perf_counter()
 
                         try:
-                            result = captured_fn(self.ctx, row_dict, *arg_vals, **kw_vals)  # type: ignore[call-arg]
-                            result = _ensure_tuple(result)
+                            if captured_uses_context:
+                                result = captured_fn(self.ctx, row_dict, *arg_vals, **kw_vals)  # type: ignore[call-arg]
+                            else:
+                                result = captured_fn(row_dict, *arg_vals, **kw_vals)  # type: ignore[call-arg]
+
+                            # Normalize result to list of tuples (handles generators and single values)
+                            results = list(_normalize_result(result))
+
                             duration_ms = int((time.perf_counter() - start_time) * 1000)
                             # Success: record attempt with no error
                             attempts.append((attempt, started_at, duration_ms, None))
-                            return result, attempts
+                            return results, attempts
 
                         except Exception as e:
                             duration_ms = int((time.perf_counter() - start_time) * 1000)
@@ -394,16 +402,29 @@ def cdtf(
                     row_dict: Dict[str, Any],
                     arg_vals: List[Any],
                     kw_vals: Dict[str, Any],
-                ) -> Tuple[Any, ...]:
-                    """Process a single row and return the full output tuple."""
-                    result, attempts = self._execute_with_retry(row_dict, arg_vals, kw_vals)
+                ) -> List[Tuple[Any, ...]]:
+                    """Process a single row and return list of full output tuples.
 
-                    if result is None:
-                        # Error case: null for all user output columns
+                    Returns a list because generators can yield multiple rows per input.
+                    """
+                    results, attempts = self._execute_with_retry(row_dict, arg_vals, kw_vals)
+
+                    if results is None:
+                        # Error case: null for all user output columns, single row
                         null_results = tuple(None for _ in range(num_user_output_cols))
-                        return base_vals + null_results + (attempts,)
+                        if captured_include_metadata:
+                            return [base_vals + null_results + (attempts,)]
+                        else:
+                            return [base_vals + null_results]
                     else:
-                        return base_vals + result + (attempts,)
+                        # Success case: may have multiple results from generator
+                        output_rows = []
+                        for result in results:
+                            if captured_include_metadata:
+                                output_rows.append(base_vals + result + (attempts,))
+                            else:
+                                output_rows.append(base_vals + result)
+                        return output_rows
 
                 def eval(self, row):
                     d = _as_dict(row)
@@ -413,7 +434,8 @@ def cdtf(
 
                     if self.pool is None or self.futs is None:
                         # Sequential execution - process and yield immediately
-                        yield self._process_one(base_vals, d, arg_vals, kw_vals)
+                        for output_row in self._process_one(base_vals, d, arg_vals, kw_vals):
+                            yield output_row
                     else:
                         # Concurrent execution - submit to thread pool
                         fut = self.pool.submit(self._process_one, base_vals, d, arg_vals, kw_vals)
@@ -422,14 +444,16 @@ def cdtf(
                         # Yield results as they complete to avoid memory buildup
                         if captured_max_workers is not None and len(self.futs) >= captured_max_workers:
                             for f in as_completed(self.futs[:captured_max_workers]):
-                                yield f.result()
+                                for output_row in f.result():
+                                    yield output_row
                             self.futs = self.futs[captured_max_workers:]
 
                 def terminate(self):
                     if self.pool is not None and self.futs is not None:
                         # Drain remaining futures
                         for f in as_completed(self.futs):
-                            yield f.result()
+                            for output_row in f.result():
+                                yield output_row
 
                         # Shutdown thread pool
                         self.pool.shutdown(wait=True, cancel_futures=False)
@@ -439,7 +463,7 @@ def cdtf(
                         captured_cleanup_fn(self.ctx)
 
             fn_name = f"udtf_{str(uuid.uuid4()).replace('-', '')}"
-            input_df.sparkSession.udtf.register(fn_name, _ConcurrentUDTF)  # type: ignore
+            input_df.sparkSession.udtf.register(fn_name, _FdtfUDTF)  # type: ignore
 
             table_uuid = f"table_{str(uuid.uuid4()).replace('-', '')}"
             input_df.createOrReplaceTempView(table_uuid)
@@ -464,7 +488,7 @@ def cdtf(
             args_dict.update(kwargs)
             return input_df.sparkSession.sql(sql, args=args_dict)
 
-        _runner.__name__ = getattr(fn, "__name__", "cdtf_runner")
+        _runner.__name__ = getattr(fn, "__name__", "fdtf_runner")
         _runner.__doc__ = fn.__doc__
         return cast(DataFrameTransformer[P], _runner)
 

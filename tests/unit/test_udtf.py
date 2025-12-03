@@ -10,7 +10,7 @@ from pyspark.sql.types import (
 )
 
 try:
-    from pyspark_toolkit.udtf import cdtf
+    from pyspark_toolkit.udtf import _validate_fdtf_signature, fdtf
 except ImportError:
     pytest.skip("spark40_only not available", allow_module_level=True)
 
@@ -41,13 +41,13 @@ def get_last_error(row):
     return metadata[-1]["error"]
 
 
-# cdtf (Concurrent DataFrame Table Function) Tests
+# fdtf (Flexible DataFrame Table Function) Tests
 
 
 @pytest.mark.spark40_only
-def test_cdtf_basic_concurrent_execution(spark):
+def test_fdtf_basic_concurrent_execution(spark):
     """
-    Test that cdtf processes rows concurrently and returns correct results.
+    Test that fdtf processes rows concurrently and returns correct results.
     This ensures the basic concurrent execution pattern works.
     """
     # when I have a DataFrame
@@ -56,14 +56,14 @@ def test_cdtf_basic_concurrent_execution(spark):
         ["id", "value"],
     )
 
-    # and I have a cdtf function with simple init/cleanup
+    # and I have a fdtf function with simple init/cleanup
     def my_init(self):
         self.counter = 0
 
     def my_cleanup(self):  # noqa: ARG001
         pass
 
-    @cdtf(
+    @fdtf(
         output_schema="doubled INT",
         init_fn=my_init,
         cleanup_fn=my_cleanup,
@@ -88,16 +88,16 @@ def test_cdtf_basic_concurrent_execution(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_without_init_fn(spark):
+def test_fdtf_without_init_fn(spark):
     """
-    Test that cdtf works without providing init_fn.
+    Test that fdtf works without providing init_fn.
     This ensures the simple usage pattern works.
     """
     # when I have a DataFrame
     df = spark.createDataFrame([(1,), (2,), (3,)], ["id"])
 
-    # and I have a cdtf function without init_fn
-    @cdtf(output_schema="doubled INT", max_workers=2)
+    # and I have a fdtf function without init_fn
+    @fdtf(output_schema="doubled INT", max_workers=2)
     def double_id(self, row):  # noqa: ARG001
         return (row["id"] * 2,)
 
@@ -113,16 +113,16 @@ def test_cdtf_without_init_fn(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_metadata_contains_execution_details(spark):
+def test_fdtf_metadata_contains_execution_details(spark):
     """
-    Test that cdtf _metadata column contains proper execution details.
+    Test that fdtf _metadata column contains proper execution details.
     This ensures metadata is captured correctly as an array of attempt records.
     """
     # when I have a DataFrame
     df = spark.createDataFrame([(1,)], ["id"])
 
-    # and I have a cdtf function
-    @cdtf(output_schema="result INT", max_workers=1)
+    # and I have a fdtf function
+    @fdtf(output_schema="result INT", max_workers=1)
     def process(self, row):  # noqa: ARG001
         return (42,)
 
@@ -144,9 +144,9 @@ def test_cdtf_metadata_contains_execution_details(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_preserves_all_input_columns(spark):
+def test_fdtf_preserves_all_input_columns(spark):
     """
-    Test that cdtf preserves all input columns in the output.
+    Test that fdtf preserves all input columns in the output.
     This ensures data integrity is maintained.
     """
     # when I have a DataFrame with multiple columns
@@ -155,8 +155,8 @@ def test_cdtf_preserves_all_input_columns(spark):
         ["id", "name", "score"],
     )
 
-    # and I have a cdtf function
-    @cdtf(output_schema="flag STRING", max_workers=2)
+    # and I have a fdtf function
+    @fdtf(output_schema="flag STRING", max_workers=2)
     def add_flag(self, row):  # noqa: ARG001
         return ("ok",)
 
@@ -172,16 +172,16 @@ def test_cdtf_preserves_all_input_columns(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_with_positional_args(spark):
+def test_fdtf_with_positional_args(spark):
     """
-    Test that cdtf correctly passes positional arguments to the function.
+    Test that fdtf correctly passes positional arguments to the function.
     This ensures argument handling works.
     """
     # when I have a DataFrame
     df = spark.createDataFrame([(1,), (2,)], ["id"])
 
-    # and I have a cdtf function that uses positional args
-    @cdtf(output_schema="result INT", max_workers=2)
+    # and I have a fdtf function that uses positional args
+    @fdtf(output_schema="result INT", max_workers=2)
     def add_args(self, row, arg1, arg2):  # noqa: ARG001
         return (row["id"] + arg1 + arg2,)
 
@@ -195,16 +195,16 @@ def test_cdtf_with_positional_args(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_with_keyword_args(spark):
+def test_fdtf_with_keyword_args(spark):
     """
-    Test that cdtf correctly passes keyword arguments to the function.
+    Test that fdtf correctly passes keyword arguments to the function.
     This ensures kwarg handling works.
     """
     # when I have a DataFrame
     df = spark.createDataFrame([(1,), (2,)], ["id"])
 
-    # and I have a cdtf function that uses kwargs
-    @cdtf(output_schema="result INT", max_workers=2)
+    # and I have a fdtf function that uses kwargs
+    @fdtf(output_schema="result INT", max_workers=2)
     def compute(self, row, multiplier=1, offset=0):  # noqa: ARG001
         return (row["id"] * multiplier + offset,)
 
@@ -218,16 +218,16 @@ def test_cdtf_with_keyword_args(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_error_handling_captures_exceptions(spark):
+def test_fdtf_error_handling_captures_exceptions(spark):
     """
-    Test that cdtf captures exceptions in the metadata.
+    Test that fdtf captures exceptions in the metadata.
     This ensures error handling works correctly.
     """
     # when I have a DataFrame
     df = spark.createDataFrame([(1,), (2,)], ["id"])
 
-    # and I have a cdtf function that raises an error for some rows
-    @cdtf(output_schema="result INT", max_workers=2)
+    # and I have a fdtf function that raises an error for some rows
+    @fdtf(output_schema="result INT", max_workers=2)
     def may_fail(self, row):  # noqa: ARG001
         if row["id"] == 1:
             raise ValueError("Simulated error")
@@ -252,19 +252,19 @@ def test_cdtf_error_handling_captures_exceptions(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_with_max_retries_retries_on_failure(spark):
+def test_fdtf_with_max_retries_retries_on_failure(spark):
     """
-    Test that cdtf retries when max_retries is set.
+    Test that fdtf retries when max_retries is set.
     This ensures retry logic works correctly.
     """
     # when I have a DataFrame
     df = spark.createDataFrame([(1,)], ["id"])
 
-    # and I have a cdtf function that fails twice then succeeds
+    # and I have a fdtf function that fails twice then succeeds
     def my_init(self):
         self.attempt_count = 0
 
-    @cdtf(
+    @fdtf(
         output_schema="result INT",
         init_fn=my_init,
         max_workers=1,
@@ -292,16 +292,16 @@ def test_cdtf_with_max_retries_retries_on_failure(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_with_max_retries_fails_after_exhausting_retries(spark):
+def test_fdtf_with_max_retries_fails_after_exhausting_retries(spark):
     """
-    Test that cdtf fails after exhausting max retries.
+    Test that fdtf fails after exhausting max retries.
     This ensures retry limits are respected.
     """
     # when I have a DataFrame
     df = spark.createDataFrame([(1,)], ["id"])
 
-    # and I have a cdtf function that always fails
-    @cdtf(
+    # and I have a fdtf function that always fails
+    @fdtf(
         output_schema="result INT",
         max_workers=1,
         max_retries=2,
@@ -325,16 +325,16 @@ def test_cdtf_with_max_retries_fails_after_exhausting_retries(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_no_retry_by_default(spark):
+def test_fdtf_no_retry_by_default(spark):
     """
-    Test that cdtf does not retry when max_retries is 0 (default).
+    Test that fdtf does not retry when max_retries is 0 (default).
     This ensures default no-retry behavior.
     """
     # when I have a DataFrame
     df = spark.createDataFrame([(1,)], ["id"])
 
-    # and I have a cdtf function that fails (using default max_retries=0)
-    @cdtf(
+    # and I have a fdtf function that fails (using default max_retries=0)
+    @fdtf(
         output_schema="result INT",
         max_workers=1,
     )
@@ -352,9 +352,9 @@ def test_cdtf_no_retry_by_default(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_resources_passed_to_function(spark):
+def test_fdtf_resources_passed_to_function(spark):
     """
-    Test that cdtf passes resources from init_fn to the processing function.
+    Test that fdtf passes resources from init_fn to the processing function.
     This ensures resource injection works correctly.
     """
     # when I have a DataFrame
@@ -365,8 +365,8 @@ def test_cdtf_resources_passed_to_function(spark):
         self.multiplier = 10
         self.prefix = "result_"
 
-    # and I have a cdtf function that uses self attributes
-    @cdtf(
+    # and I have a fdtf function that uses self attributes
+    @fdtf(
         output_schema="computed STRING",
         init_fn=my_init,
         max_workers=2,
@@ -385,16 +385,16 @@ def test_cdtf_resources_passed_to_function(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_with_ddl_string_schema(spark):
+def test_fdtf_with_ddl_string_schema(spark):
     """
-    Test that cdtf works with DDL string output schema.
+    Test that fdtf works with DDL string output schema.
     This ensures DDL string schema support works.
     """
     # when I have a DataFrame
     df = spark.createDataFrame([(1,), (2,)], ["id"])
 
-    # and I have a cdtf function with DDL string schema
-    @cdtf(output_schema="doubled INT, label STRING", max_workers=2)
+    # and I have a fdtf function with DDL string schema
+    @fdtf(output_schema="doubled INT, label STRING", max_workers=2)
     def transform(self, row):  # noqa: ARG001
         return (row["id"] * 2, f"row_{row['id']}")
 
@@ -410,16 +410,16 @@ def test_cdtf_with_ddl_string_schema(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_output_schema_structure(spark):
+def test_fdtf_output_schema_structure(spark):
     """
-    Test that cdtf produces correct output schema structure.
+    Test that fdtf produces correct output schema structure.
     This ensures schema ordering and types are correct.
     """
     # when I have a DataFrame
     df = spark.createDataFrame([(1, "a")], ["id", "value"])
 
-    # and I have a cdtf function
-    @cdtf(
+    # and I have a fdtf function
+    @fdtf(
         output_schema=StructType(
             [
                 StructField("result", IntegerType()),
@@ -457,9 +457,9 @@ def test_cdtf_output_schema_structure(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_with_empty_dataframe(spark):
+def test_fdtf_with_empty_dataframe(spark):
     """
-    Test that cdtf handles empty DataFrames correctly.
+    Test that fdtf handles empty DataFrames correctly.
     This ensures edge case handling for empty input.
     """
     # when I have an empty DataFrame
@@ -471,8 +471,8 @@ def test_cdtf_with_empty_dataframe(spark):
     )
     df = spark.createDataFrame([], schema)
 
-    # and I have a cdtf function
-    @cdtf(output_schema="result INT", max_workers=2)
+    # and I have a fdtf function
+    @fdtf(output_schema="result INT", max_workers=2)
     def process(self, row):  # noqa: ARG001
         return (42,)
 
@@ -488,19 +488,19 @@ def test_cdtf_with_empty_dataframe(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_with_max_retries_retries_any_exception(spark):
+def test_fdtf_with_max_retries_retries_any_exception(spark):
     """
-    Test that cdtf retries any exception when max_retries is set.
+    Test that fdtf retries any exception when max_retries is set.
     This ensures retry works for all exception types.
     """
     # when I have a DataFrame
     df = spark.createDataFrame([(1,)], ["id"])
 
-    # and I have a cdtf function that raises an exception
+    # and I have a fdtf function that raises an exception
     def my_init(self):
         self.attempt_count = 0
 
-    @cdtf(
+    @fdtf(
         output_schema="result INT",
         init_fn=my_init,
         max_workers=1,
@@ -527,16 +527,16 @@ def test_cdtf_with_max_retries_retries_any_exception(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_zero_retries_fails_immediately(spark):
+def test_fdtf_zero_retries_fails_immediately(spark):
     """
-    Test that cdtf with max_retries=0 does not retry on failure.
+    Test that fdtf with max_retries=0 does not retry on failure.
     This ensures default no-retry behavior.
     """
     # when I have a DataFrame
     df = spark.createDataFrame([(1,)], ["id"])
 
-    # and I have a cdtf function with max_retries=0 (the default)
-    @cdtf(output_schema="result INT", max_workers=1, max_retries=0)
+    # and I have a fdtf function with max_retries=0 (the default)
+    @fdtf(output_schema="result INT", max_workers=1, max_retries=0)
     def fails_once(self, row):  # noqa: ARG001
         raise Exception("Service Unavailable")
 
@@ -552,16 +552,16 @@ def test_cdtf_zero_retries_fails_immediately(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_with_single_value_return(spark):
+def test_fdtf_with_single_value_return(spark):
     """
-    Test that cdtf handles single value returns without explicit tuple wrapping.
+    Test that fdtf handles single value returns without explicit tuple wrapping.
     This ensures users can return a single value directly.
     """
     # when I have a DataFrame
     df = spark.createDataFrame([(1,), (2,), (3,)], ["id"])
 
-    # and I have a cdtf function that returns a single value (not a tuple)
-    @cdtf(output_schema="doubled INT", max_workers=2)
+    # and I have a fdtf function that returns a single value (not a tuple)
+    @fdtf(output_schema="doubled INT", max_workers=2)
     def double_value(self, row):  # noqa: ARG001
         return row["id"] * 2  # returns int, not (int,)
 
@@ -577,16 +577,16 @@ def test_cdtf_with_single_value_return(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_with_single_string_value_return(spark):
+def test_fdtf_with_single_string_value_return(spark):
     """
-    Test that cdtf handles single string value returns.
+    Test that fdtf handles single string value returns.
     This ensures string values are wrapped correctly.
     """
     # when I have a DataFrame
     df = spark.createDataFrame([(1, "hello"), (2, "world")], ["id", "value"])
 
-    # and I have a cdtf function that returns a single string value
-    @cdtf(output_schema="upper STRING", max_workers=2)
+    # and I have a fdtf function that returns a single string value
+    @fdtf(output_schema="upper STRING", max_workers=2)
     def upper_value(self, row):  # noqa: ARG001
         return row["value"].upper()  # returns str, not (str,)
 
@@ -600,16 +600,16 @@ def test_cdtf_with_single_string_value_return(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_with_tuple_return_still_works(spark):
+def test_fdtf_with_tuple_return_still_works(spark):
     """
-    Test that cdtf still works with explicit tuple returns.
+    Test that fdtf still works with explicit tuple returns.
     This ensures backwards compatibility with tuple returns.
     """
     # when I have a DataFrame
     df = spark.createDataFrame([(1,), (2,)], ["id"])
 
-    # and I have a cdtf function that returns an explicit tuple
-    @cdtf(output_schema="doubled INT", max_workers=2)
+    # and I have a fdtf function that returns an explicit tuple
+    @fdtf(output_schema="doubled INT", max_workers=2)
     def double_value(self, row):  # noqa: ARG001
         return (row["id"] * 2,)  # explicit tuple
 
@@ -623,16 +623,16 @@ def test_cdtf_with_tuple_return_still_works(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_with_multi_column_tuple_return(spark):
+def test_fdtf_with_multi_column_tuple_return(spark):
     """
-    Test that cdtf correctly handles multi-column tuple returns.
+    Test that fdtf correctly handles multi-column tuple returns.
     This ensures tuple returns with multiple values work.
     """
     # when I have a DataFrame
     df = spark.createDataFrame([(1, "a"), (2, "b")], ["id", "value"])
 
-    # and I have a cdtf function that returns multiple columns
-    @cdtf(output_schema="doubled INT, upper STRING", max_workers=2)
+    # and I have a fdtf function that returns multiple columns
+    @fdtf(output_schema="doubled INT, upper STRING", max_workers=2)
     def transform(self, row):  # noqa: ARG001
         return (row["id"] * 2, row["value"].upper())
 
@@ -651,16 +651,16 @@ def test_cdtf_with_multi_column_tuple_return(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_with_custom_metadata_column_name(spark):
+def test_fdtf_with_custom_metadata_column_name(spark):
     """
-    Test that cdtf uses custom metadata column name when specified.
+    Test that fdtf uses custom metadata column name when specified.
     This ensures the metadata_column parameter works correctly.
     """
     # when I have a DataFrame
     df = spark.createDataFrame([(1,)], ["id"])
 
-    # and I have a cdtf function with custom metadata column name
-    @cdtf(output_schema="result INT", max_workers=1, metadata_column="execution_info")
+    # and I have a fdtf function with custom metadata column name
+    @fdtf(output_schema="result INT", max_workers=1, metadata_column="execution_info")
     def process(self, row):  # noqa: ARG001
         return (42,)
 
@@ -684,16 +684,16 @@ def test_cdtf_with_custom_metadata_column_name(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_with_custom_metadata_column_has_correct_data(spark):
+def test_fdtf_with_custom_metadata_column_has_correct_data(spark):
     """
-    Test that cdtf with custom metadata column name contains correct data.
+    Test that fdtf with custom metadata column name contains correct data.
     This ensures custom column naming doesn't affect data integrity.
     """
     # when I have a DataFrame
     df = spark.createDataFrame([(1,)], ["id"])
 
-    # and I have a cdtf function with custom metadata column that fails
-    @cdtf(
+    # and I have a fdtf function with custom metadata column that fails
+    @fdtf(
         output_schema="result INT",
         max_workers=1,
         metadata_column="meta",
@@ -717,9 +717,9 @@ def test_cdtf_with_custom_metadata_column_has_correct_data(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_concurrent_execution_with_shared_client(spark):
+def test_fdtf_concurrent_execution_with_shared_client(spark):
     """
-    Test that cdtf correctly shares resources across concurrent workers.
+    Test that fdtf correctly shares resources across concurrent workers.
     This ensures the thread pool and init_fn work together properly.
     """
     import threading
@@ -735,8 +735,8 @@ def test_cdtf_concurrent_execution_with_shared_client(spark):
         self.max_concurrent = 0
         self.current_concurrent = 0
 
-    # and I have a cdtf function that simulates work and tracks concurrency
-    @cdtf(
+    # and I have a fdtf function that simulates work and tracks concurrency
+    @fdtf(
         output_schema="result INT",
         init_fn=my_init,
         max_workers=5,
@@ -772,9 +772,9 @@ def test_cdtf_concurrent_execution_with_shared_client(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_shared_http_client_simulation(spark):
+def test_fdtf_shared_http_client_simulation(spark):
     """
-    Test that cdtf can share a simulated HTTP client across concurrent calls.
+    Test that fdtf can share a simulated HTTP client across concurrent calls.
     This ensures realistic usage patterns with shared connections work.
     """
     import threading
@@ -809,7 +809,7 @@ def test_cdtf_shared_http_client_simulation(spark):
         # in real code, this would close connections
         pass
 
-    @cdtf(
+    @fdtf(
         output_schema="api_response STRING",
         init_fn=my_init,
         cleanup_fn=my_cleanup,
@@ -837,9 +837,9 @@ def test_cdtf_shared_http_client_simulation(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_thread_safety_with_shared_state(spark):
+def test_fdtf_thread_safety_with_shared_state(spark):
     """
-    Test that cdtf maintains thread safety when workers modify shared state.
+    Test that fdtf maintains thread safety when workers modify shared state.
     This ensures concurrent modifications don't cause race conditions.
     """
     import threading
@@ -852,7 +852,7 @@ def test_cdtf_thread_safety_with_shared_state(spark):
         self.lock = threading.Lock()
         self.processed_ids = []
 
-    @cdtf(
+    @fdtf(
         output_schema="squared INT",
         init_fn=my_init,
         max_workers=10,
@@ -883,9 +883,9 @@ def test_cdtf_thread_safety_with_shared_state(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_sequential_execution_with_max_workers_none(spark):
+def test_fdtf_sequential_execution_with_max_workers_none(spark):
     """
-    Test that cdtf processes rows sequentially when max_workers is None.
+    Test that fdtf processes rows sequentially when max_workers is None.
     This ensures the non-concurrent path works correctly.
     """
     # when I have a DataFrame
@@ -894,8 +894,8 @@ def test_cdtf_sequential_execution_with_max_workers_none(spark):
         ["id", "value"],
     )
 
-    # and I have a cdtf function with max_workers=None
-    @cdtf(output_schema="doubled INT", max_workers=None)
+    # and I have a fdtf function with max_workers=None
+    @fdtf(output_schema="doubled INT", max_workers=None)
     def double_id(self, row):  # noqa: ARG001
         return (row["id"] * 2,)
 
@@ -915,16 +915,16 @@ def test_cdtf_sequential_execution_with_max_workers_none(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_sequential_execution_with_max_workers_zero(spark):
+def test_fdtf_sequential_execution_with_max_workers_zero(spark):
     """
-    Test that cdtf processes rows sequentially when max_workers is 0.
+    Test that fdtf processes rows sequentially when max_workers is 0.
     This ensures 0 is treated the same as None.
     """
     # when I have a DataFrame
     df = spark.createDataFrame([(1,), (2,)], ["id"])
 
-    # and I have a cdtf function with max_workers=0
-    @cdtf(output_schema="squared INT", max_workers=0)
+    # and I have a fdtf function with max_workers=0
+    @fdtf(output_schema="squared INT", max_workers=0)
     def square_id(self, row):  # noqa: ARG001
         return (row["id"] ** 2,)
 
@@ -939,9 +939,9 @@ def test_cdtf_sequential_execution_with_max_workers_zero(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_sequential_with_init_and_cleanup(spark):
+def test_fdtf_sequential_with_init_and_cleanup(spark):
     """
-    Test that cdtf sequential mode still calls init_fn and cleanup_fn.
+    Test that fdtf sequential mode still calls init_fn and cleanup_fn.
     This ensures resource management works without threading.
     """
     # when I have a DataFrame
@@ -954,8 +954,8 @@ def test_cdtf_sequential_with_init_and_cleanup(spark):
     def my_cleanup(self):  # noqa: ARG001
         pass
 
-    # and I have a cdtf function with max_workers=None
-    @cdtf(
+    # and I have a fdtf function with max_workers=None
+    @fdtf(
         output_schema="result INT",
         init_fn=my_init,
         cleanup_fn=my_cleanup,
@@ -974,9 +974,9 @@ def test_cdtf_sequential_with_init_and_cleanup(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_sequential_with_retries(spark):
+def test_fdtf_sequential_with_retries(spark):
     """
-    Test that cdtf sequential mode supports retries.
+    Test that fdtf sequential mode supports retries.
     This ensures retry logic works without threading.
     """
     # when I have a DataFrame
@@ -986,7 +986,7 @@ def test_cdtf_sequential_with_retries(spark):
     def my_init(self):
         self.attempt_count = 0
 
-    @cdtf(
+    @fdtf(
         output_schema="result INT",
         init_fn=my_init,
         max_workers=None,
@@ -1013,16 +1013,16 @@ def test_cdtf_sequential_with_retries(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_sequential_error_handling(spark):
+def test_fdtf_sequential_error_handling(spark):
     """
-    Test that cdtf sequential mode captures errors correctly.
+    Test that fdtf sequential mode captures errors correctly.
     This ensures error handling works without threading.
     """
     # when I have a DataFrame
     df = spark.createDataFrame([(1,), (2,)], ["id"])
 
     # and I have a function that fails for some rows
-    @cdtf(output_schema="result INT", max_workers=None)
+    @fdtf(output_schema="result INT", max_workers=None)
     def may_fail(self, row):  # noqa: ARG001
         if row["id"] == 1:
             raise ValueError("Simulated error")
@@ -1044,16 +1044,16 @@ def test_cdtf_sequential_error_handling(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_sequential_preserves_row_order(spark):
+def test_fdtf_sequential_preserves_row_order(spark):
     """
-    Test that cdtf sequential mode preserves row order.
+    Test that fdtf sequential mode preserves row order.
     Unlike concurrent mode, sequential should maintain input order.
     """
     # when I have a DataFrame with specific order
     df = spark.createDataFrame([(3,), (1,), (2,)], ["id"])
 
-    # and I have a cdtf function with max_workers=None
-    @cdtf(output_schema="doubled INT", max_workers=None)
+    # and I have a fdtf function with max_workers=None
+    @fdtf(output_schema="doubled INT", max_workers=None)
     def double_id(self, row):  # noqa: ARG001
         return (row["id"] * 2,)
 
@@ -1071,16 +1071,16 @@ def test_cdtf_sequential_preserves_row_order(spark):
 
 
 @pytest.mark.spark40_only
-def test_cdtf_sequential_with_args_and_kwargs(spark):
+def test_fdtf_sequential_with_args_and_kwargs(spark):
     """
-    Test that cdtf sequential mode passes args and kwargs correctly.
+    Test that fdtf sequential mode passes args and kwargs correctly.
     This ensures argument handling works without threading.
     """
     # when I have a DataFrame
     df = spark.createDataFrame([(1,), (2,)], ["id"])
 
-    # and I have a cdtf function that uses args and kwargs
-    @cdtf(output_schema="result INT", max_workers=None)
+    # and I have a fdtf function that uses args and kwargs
+    @fdtf(output_schema="result INT", max_workers=None)
     def compute(self, row, multiplier, offset=0):  # noqa: ARG001
         return (row["id"] * multiplier + offset,)
 
@@ -1091,3 +1091,576 @@ def test_cdtf_sequential_with_args_and_kwargs(spark):
     # then args and kwargs should be passed correctly
     assert results[0]["result"] == 15  # 1 * 5 + 10
     assert results[1]["result"] == 20  # 2 * 5 + 10
+
+
+# Signature Validation Tests
+
+
+@pytest.mark.spark40_only
+def test_validate_fdtf_signature_with_row_only():
+    """
+    Test that _validate_fdtf_signature accepts functions with only row parameter.
+    This ensures the simple signature works without init_fn.
+    """
+
+    # when I have a function with only row parameter
+    def simple_fn(row):
+        return row
+
+    # and I validate it without init_fn
+    result = _validate_fdtf_signature(simple_fn, has_init_fn=False)
+
+    # then it should return False (no context needed)
+    assert result is False
+
+
+@pytest.mark.spark40_only
+def test_validate_fdtf_signature_with_self_and_row():
+    """
+    Test that _validate_fdtf_signature accepts functions with self and row parameters.
+    This ensures the context signature is recognized.
+    """
+
+    # when I have a function with self and row parameters
+    def context_fn(self, row):
+        return row
+
+    # and I validate it without init_fn
+    result = _validate_fdtf_signature(context_fn, has_init_fn=False)
+
+    # then it should return True (uses context because first param is 'self')
+    assert result is True
+
+
+@pytest.mark.spark40_only
+def test_validate_fdtf_signature_with_init_fn_requires_self():
+    """
+    Test that _validate_fdtf_signature requires self when init_fn is provided.
+    This ensures proper validation when resources are initialized.
+    """
+
+    # when I have a function with only row parameter
+    def simple_fn(row):
+        return row
+
+    # and I validate it with init_fn=True
+    # then it should raise TypeError
+    with pytest.raises(TypeError) as exc_info:
+        _validate_fdtf_signature(simple_fn, has_init_fn=True)
+
+    assert "must accept 'self' as the first parameter" in str(exc_info.value)
+    assert "simple_fn" in str(exc_info.value)
+
+
+@pytest.mark.spark40_only
+def test_validate_fdtf_signature_with_no_params_raises_error():
+    """
+    Test that _validate_fdtf_signature raises error for functions with no parameters.
+    This ensures proper error messages for invalid signatures.
+    """
+
+    # when I have a function with no parameters
+    def no_params():
+        return 42
+
+    # and I validate it
+    # then it should raise TypeError
+    with pytest.raises(TypeError) as exc_info:
+        _validate_fdtf_signature(no_params, has_init_fn=False)
+
+    assert "must accept at least a 'row' parameter" in str(exc_info.value)
+    assert "no_params" in str(exc_info.value)
+
+
+@pytest.mark.spark40_only
+def test_validate_fdtf_signature_with_init_fn_and_self_succeeds():
+    """
+    Test that _validate_fdtf_signature succeeds when init_fn is provided and function has self.
+    This ensures the expected use case works.
+    """
+
+    # when I have a function with self and row parameters
+    def context_fn(self, row):
+        return row
+
+    # and I validate it with init_fn=True
+    result = _validate_fdtf_signature(context_fn, has_init_fn=True)
+
+    # then it should return True (uses context)
+    assert result is True
+
+
+@pytest.mark.spark40_only
+def test_fdtf_without_self_parameter(spark):
+    """
+    Test that fdtf works with simple function signature (no self).
+    This ensures the simplified API works end-to-end.
+    """
+    # when I have a DataFrame
+    df = spark.createDataFrame([(1,), (2,), (3,)], ["id"])
+
+    # and I have a fdtf function without self parameter
+    @fdtf(output_schema="doubled INT", max_workers=2)
+    def double_id(row):
+        return (row["id"] * 2,)
+
+    # and I apply the function
+    result_df = double_id(df)
+    results = sorted(result_df.collect(), key=lambda r: r["id"])
+
+    # then it should work correctly
+    assert len(results) == 3
+    assert results[0]["doubled"] == 2
+    assert results[1]["doubled"] == 4
+    assert results[2]["doubled"] == 6
+
+
+@pytest.mark.spark40_only
+def test_fdtf_without_self_with_args(spark):
+    """
+    Test that fdtf without self correctly passes positional arguments.
+    This ensures argument handling works with the simplified signature.
+    """
+    # when I have a DataFrame
+    df = spark.createDataFrame([(1,), (2,)], ["id"])
+
+    # and I have a fdtf function without self that uses args
+    @fdtf(output_schema="result INT", max_workers=2)
+    def add_values(row, arg1, arg2):
+        return (row["id"] + arg1 + arg2,)
+
+    # and I call it with positional arguments
+    result_df = add_values(df, 10, 20)
+    results = sorted(result_df.collect(), key=lambda r: r["id"])
+
+    # then arguments should be passed correctly
+    assert results[0]["result"] == 31  # 1 + 10 + 20
+    assert results[1]["result"] == 32  # 2 + 10 + 20
+
+
+@pytest.mark.spark40_only
+def test_fdtf_without_self_with_kwargs(spark):
+    """
+    Test that fdtf without self correctly passes keyword arguments.
+    This ensures kwarg handling works with the simplified signature.
+    """
+    # when I have a DataFrame
+    df = spark.createDataFrame([(1,), (2,)], ["id"])
+
+    # and I have a fdtf function without self that uses kwargs
+    @fdtf(output_schema="result INT", max_workers=2)
+    def compute(row, multiplier=1, offset=0):
+        return (row["id"] * multiplier + offset,)
+
+    # and I call it with keyword arguments
+    result_df = compute(df, multiplier=5, offset=10)
+    results = sorted(result_df.collect(), key=lambda r: r["id"])
+
+    # then kwargs should be passed correctly
+    assert results[0]["result"] == 15  # 1 * 5 + 10
+    assert results[1]["result"] == 20  # 2 * 5 + 10
+
+
+@pytest.mark.spark40_only
+def test_fdtf_with_init_fn_requires_self_in_decorated_function(spark):
+    """
+    Test that fdtf raises error when init_fn is provided but function lacks self.
+    This ensures helpful error messages for misconfigured functions.
+    """
+
+    # when I have an init function
+    def my_init(self):
+        self.value = 42
+
+    # and I try to decorate a function without self
+    # then it should raise TypeError at decoration time
+    with pytest.raises(TypeError) as exc_info:
+
+        @fdtf(output_schema="result INT", init_fn=my_init)
+        def missing_self(row):
+            return (row["id"],)
+
+    assert "must accept 'self' as the first parameter" in str(exc_info.value)
+
+
+@pytest.mark.spark40_only
+def test_fdtf_without_self_sequential_execution(spark):
+    """
+    Test that fdtf without self works with sequential execution.
+    This ensures the simplified signature works with max_workers=None.
+    """
+    # when I have a DataFrame
+    df = spark.createDataFrame([(1,), (2,), (3,)], ["id"])
+
+    # and I have a fdtf function without self and max_workers=None
+    @fdtf(output_schema="squared INT", max_workers=None)
+    def square_id(row):
+        return (row["id"] ** 2,)
+
+    # and I apply the function
+    result_df = square_id(df)
+    results = result_df.collect()
+
+    # then it should work correctly and preserve order
+    assert results[0]["id"] == 1
+    assert results[0]["squared"] == 1
+    assert results[1]["id"] == 2
+    assert results[1]["squared"] == 4
+    assert results[2]["id"] == 3
+    assert results[2]["squared"] == 9
+
+
+@pytest.mark.spark40_only
+def test_fdtf_without_self_error_handling(spark):
+    """
+    Test that fdtf without self correctly captures errors.
+    This ensures error handling works with the simplified signature.
+    """
+    # when I have a DataFrame
+    df = spark.createDataFrame([(1,), (2,)], ["id"])
+
+    # and I have a fdtf function without self that raises an error
+    @fdtf(output_schema="result INT", max_workers=2)
+    def may_fail(row):
+        if row["id"] == 1:
+            raise ValueError("Simulated error")
+        return (row["id"] * 10,)
+
+    # and I apply the function
+    result_df = may_fail(df)
+    results = sorted(result_df.collect(), key=lambda r: r["id"])
+
+    # then the error row should have null result and error in metadata
+    assert results[0]["result"] is None
+    assert_failure(results[0])
+    error = get_last_error(results[0])
+    assert "ValueError" in error
+    assert "Simulated error" in error
+
+    # and the success row should have result and no error
+    assert results[1]["result"] == 20
+    assert_success(results[1])
+
+
+# Metadata Column Disabled Tests
+
+
+@pytest.mark.spark40_only
+def test_fdtf_with_metadata_column_none_disables_metadata(spark):
+    """
+    Test that fdtf with metadata_column=None produces output without metadata.
+    This ensures metadata can be disabled for simpler output.
+    """
+    # when I have a DataFrame
+    df = spark.createDataFrame([(1,), (2,), (3,)], ["id"])
+
+    # and I have a fdtf function with metadata_column=None
+    @fdtf(output_schema="doubled INT", max_workers=None, metadata_column=None)
+    def double_id(row):
+        return (row["id"] * 2,)
+
+    # and I apply the function
+    result_df = double_id(df)
+    results = result_df.collect()
+
+    # then I should get results without metadata column
+    assert len(results) == 3
+    expected_fields = ["id", "doubled"]
+    actual_fields = [f.name for f in result_df.schema.fields]
+    assert actual_fields == expected_fields
+
+    # and results should be correct
+    assert results[0]["doubled"] == 2
+    assert results[1]["doubled"] == 4
+    assert results[2]["doubled"] == 6
+
+
+@pytest.mark.spark40_only
+def test_fdtf_with_metadata_column_none_with_concurrent_execution(spark):
+    """
+    Test that fdtf with metadata_column=None works with concurrent execution.
+    This ensures the feature works in all execution modes.
+    """
+    # when I have a DataFrame
+    df = spark.createDataFrame([(1,), (2,), (3,)], ["id"])
+
+    # and I have a fdtf function with max_workers and metadata_column=None
+    @fdtf(output_schema="doubled INT", max_workers=2, metadata_column=None)
+    def double_id(row):
+        return (row["id"] * 2,)
+
+    # and I apply the function
+    result_df = double_id(df)
+    results = sorted(result_df.collect(), key=lambda r: r["id"])
+
+    # then schema should not have metadata
+    expected_fields = ["id", "doubled"]
+    actual_fields = [f.name for f in result_df.schema.fields]
+    assert actual_fields == expected_fields
+
+    # and results should be correct
+    assert results[0]["doubled"] == 2
+    assert results[1]["doubled"] == 4
+    assert results[2]["doubled"] == 6
+
+
+@pytest.mark.spark40_only
+def test_fdtf_with_metadata_column_none_with_init_fn(spark):
+    """
+    Test that fdtf with metadata_column=None works with init_fn.
+    This ensures the feature is compatible with resource management.
+    """
+    # when I have a DataFrame
+    df = spark.createDataFrame([(1,), (2,)], ["id"])
+
+    # and I have init_fn and metadata_column=None
+    def my_init(self):
+        self.multiplier = 10
+
+    @fdtf(output_schema="result INT", init_fn=my_init, max_workers=None, metadata_column=None)
+    def multiply(self, row):
+        return (row["id"] * self.multiplier,)
+
+    # and I apply the function
+    result_df = multiply(df)
+    results = result_df.collect()
+
+    # then schema should not have metadata
+    expected_fields = ["id", "result"]
+    actual_fields = [f.name for f in result_df.schema.fields]
+    assert actual_fields == expected_fields
+
+    # and results should be correct
+    assert results[0]["result"] == 10
+    assert results[1]["result"] == 20
+
+
+@pytest.mark.spark40_only
+def test_fdtf_with_metadata_column_none_error_returns_null(spark):
+    """
+    Test that fdtf with metadata_column=None still returns null on error.
+    This ensures error handling works without metadata.
+    """
+    # when I have a DataFrame
+    df = spark.createDataFrame([(1,), (2,)], ["id"])
+
+    # and I have a fdtf function that fails for some rows
+    @fdtf(output_schema="result INT", max_workers=None, metadata_column=None)
+    def may_fail(row):
+        if row["id"] == 1:
+            raise ValueError("Simulated error")
+        return (row["id"] * 10,)
+
+    # and I apply the function
+    result_df = may_fail(df)
+    results = result_df.collect()
+
+    # then schema should not have metadata
+    expected_fields = ["id", "result"]
+    actual_fields = [f.name for f in result_df.schema.fields]
+    assert actual_fields == expected_fields
+
+    # and the error row should have null result
+    assert results[0]["result"] is None
+
+    # and the success row should have result
+    assert results[1]["result"] == 20
+
+
+# Generator/Yield Tests (Exploding Rows)
+
+
+@pytest.mark.spark40_only
+def test_fdtf_with_generator_yields_multiple_rows(spark):
+    """
+    Test that fdtf supports generators that yield multiple rows per input.
+    This ensures exploding behavior works correctly.
+    """
+    # when I have a DataFrame with single row
+    df = spark.createDataFrame([(1, "a")], ["id", "value"])
+
+    # and I have a fdtf function that yields multiple rows
+    @fdtf(output_schema="iteration INT", max_workers=None, metadata_column=None)
+    def explode_rows(row):  # noqa: ARG001
+        for i in range(3):
+            yield (i,)
+
+    # and I apply the function
+    result_df = explode_rows(df)
+    results = result_df.collect()
+
+    # then I should get multiple output rows per input row
+    assert len(results) == 3
+    assert results[0]["id"] == 1
+    assert results[0]["value"] == "a"
+    assert results[0]["iteration"] == 0
+    assert results[1]["iteration"] == 1
+    assert results[2]["iteration"] == 2
+
+
+@pytest.mark.spark40_only
+def test_fdtf_with_generator_multiple_input_rows(spark):
+    """
+    Test that fdtf with generator works correctly with multiple input rows.
+    This ensures each input row is expanded independently.
+    """
+    # when I have a DataFrame with multiple rows
+    df = spark.createDataFrame([(1,), (2,)], ["id"])
+
+    # and I have a fdtf function that yields multiple rows based on id
+    @fdtf(output_schema="value INT", max_workers=None, metadata_column=None)
+    def explode_by_id(row):
+        for i in range(row["id"]):
+            yield (i,)
+
+    # and I apply the function
+    result_df = explode_by_id(df)
+    results = sorted(result_df.collect(), key=lambda r: (r["id"], r["value"]))
+
+    # then row with id=1 should have 1 output, id=2 should have 2 outputs
+    assert len(results) == 3  # 1 + 2
+    assert results[0]["id"] == 1
+    assert results[0]["value"] == 0
+    assert results[1]["id"] == 2
+    assert results[1]["value"] == 0
+    assert results[2]["id"] == 2
+    assert results[2]["value"] == 1
+
+
+@pytest.mark.spark40_only
+def test_fdtf_with_generator_and_metadata(spark):
+    """
+    Test that fdtf with generator includes metadata on each yielded row.
+    This ensures metadata is shared across all rows from same input.
+    """
+    # when I have a DataFrame
+    df = spark.createDataFrame([(1,)], ["id"])
+
+    # and I have a fdtf function that yields multiple rows with metadata enabled
+    @fdtf(output_schema="value INT", max_workers=None)
+    def explode_rows(row):  # noqa: ARG001
+        for i in range(2):
+            yield (i,)
+
+    # and I apply the function
+    result_df = explode_rows(df)
+    results = result_df.collect()
+
+    # then each output row should have metadata
+    assert len(results) == 2
+    assert "_metadata" in [f.name for f in result_df.schema.fields]
+    # Both rows should have the same metadata (same attempt info)
+    assert results[0]["_metadata"] == results[1]["_metadata"]
+    assert len(results[0]["_metadata"]) == 1  # One successful attempt
+
+
+@pytest.mark.spark40_only
+def test_fdtf_with_generator_concurrent_execution(spark):
+    """
+    Test that fdtf with generator works with concurrent execution.
+    This ensures thread pool handles multiple results per input.
+    """
+    # when I have a DataFrame with multiple rows
+    df = spark.createDataFrame([(1,), (2,), (3,)], ["id"])
+
+    # and I have a fdtf function that yields multiple rows
+    @fdtf(output_schema="doubled INT", max_workers=2, metadata_column=None)
+    def explode_doubled(row):
+        yield (row["id"] * 2,)
+        yield (row["id"] * 2 + 1,)
+
+    # and I apply the function
+    result_df = explode_doubled(df)
+    results = result_df.collect()
+
+    # then I should get 6 rows (2 per input)
+    assert len(results) == 6
+
+    # and results should contain expected values
+    doubled_values = sorted([r["doubled"] for r in results])
+    assert doubled_values == [2, 3, 4, 5, 6, 7]
+
+
+@pytest.mark.spark40_only
+def test_fdtf_with_generator_empty_yield(spark):
+    """
+    Test that fdtf handles generators that yield nothing for some rows.
+    This ensures filtering behavior works.
+    """
+    # when I have a DataFrame
+    df = spark.createDataFrame([(1,), (2,), (3,)], ["id"])
+
+    # and I have a fdtf function that only yields for even ids
+    @fdtf(output_schema="value INT", max_workers=None, metadata_column=None)
+    def filter_even(row):
+        if row["id"] % 2 == 0:
+            yield (row["id"],)
+        # odd ids yield nothing
+
+    # and I apply the function
+    result_df = filter_even(df)
+    results = result_df.collect()
+
+    # then only even rows should be in output
+    assert len(results) == 1
+    assert results[0]["id"] == 2
+    assert results[0]["value"] == 2
+
+
+@pytest.mark.spark40_only
+def test_fdtf_with_generator_error_retries(spark):
+    """
+    Test that fdtf retries the entire generator on error.
+    This ensures retry logic works with generators.
+    """
+    # when I have a DataFrame
+    df = spark.createDataFrame([(1,)], ["id"])
+
+    # and I have a function that tracks attempts and fails initially
+    def my_init(self):
+        self.attempt_count = 0
+
+    @fdtf(output_schema="value INT", init_fn=my_init, max_workers=None, max_retries=2)
+    def flaky_generator(self, row):  # noqa: ARG001
+        self.attempt_count += 1
+        if self.attempt_count < 2:
+            raise Exception("temporary failure")
+        yield (1,)
+        yield (2,)
+
+    # and I apply the function
+    result_df = flaky_generator(df)
+    results = result_df.collect()
+
+    # then it should eventually succeed with all yielded values
+    assert len(results) == 2
+    assert results[0]["value"] == 1
+    assert results[1]["value"] == 2
+
+    # and metadata should show retry attempts
+    metadata = results[0]["_metadata"]
+    assert len(metadata) == 2  # 1 failure + 1 success
+
+
+@pytest.mark.spark40_only
+def test_fdtf_mixed_return_and_yield_single_value(spark):
+    """
+    Test that fdtf handles single return values alongside generator capability.
+    This ensures backwards compatibility with return statements.
+    """
+    # when I have a DataFrame
+    df = spark.createDataFrame([(1,), (2,)], ["id"])
+
+    # and I have a fdtf function that returns (not yields)
+    @fdtf(output_schema="doubled INT", max_workers=None, metadata_column=None)
+    def double_value(row):
+        return (row["id"] * 2,)
+
+    # and I apply the function
+    result_df = double_value(df)
+    results = sorted(result_df.collect(), key=lambda r: r["id"])
+
+    # then it should work as before (one output per input)
+    assert len(results) == 2
+    assert results[0]["doubled"] == 2
+    assert results[1]["doubled"] == 4
