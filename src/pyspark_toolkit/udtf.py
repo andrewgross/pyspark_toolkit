@@ -122,41 +122,6 @@ def _build_metadata_schema(column_name: str) -> StructField:
     return StructField(column_name, ArrayType(attempt_struct), nullable=False)
 
 
-def _as_dict(r):
-    return r.asDict(recursive=True) if hasattr(r, "asDict") else dict(r)
-
-
-def _ensure_tuple(value: Any) -> Tuple[Any, ...]:
-    """Normalize a return value to a tuple.
-
-    If the value is already a tuple, return it as-is.
-    Otherwise, wrap it in a single-element tuple.
-    """
-    if isinstance(value, tuple):
-        return value
-    return (value,)
-
-
-def _is_generator(value: Any) -> bool:
-    """Check if value is a generator or iterator (but not a string or other iterable)."""
-    return isinstance(value, (GeneratorType, Iterator)) and not isinstance(value, (str, bytes))
-
-
-def _normalize_result(value: Any) -> Iterable[Tuple[Any, ...]]:
-    """Normalize a function result to an iterable of tuples.
-
-    Handles:
-    - Generator/iterator: yields each item as a tuple
-    - Single value: yields one tuple
-    - Tuple: yields it as-is (single result)
-    """
-    if _is_generator(value):
-        for item in value:
-            yield _ensure_tuple(item)
-    else:
-        yield _ensure_tuple(value)
-
-
 def _parse_schema(schema: Union[StructType, str]) -> StructType:
     """
     Parse a schema from either a StructType or a DDL-formatted string.
@@ -209,9 +174,14 @@ class FdtfContext:
     pass
 
 
+# Keep a module-level reference for external use (e.g., type hints)
+# The UDTF uses a local copy to avoid cloudpickle serialization issues
+_FdtfContextClass = FdtfContext
+
+
 def fdtf(
     *,
-    output_schema: Union[StructType, str],
+    returnType: Union[StructType, str],
     init_fn: Optional[Callable[["FdtfContext"], None]] = None,
     cleanup_fn: Optional[Callable[["FdtfContext"], None]] = None,
     max_workers: Optional[int] = 20,
@@ -238,7 +208,8 @@ def fdtf(
     On failure (all retries exhausted), the user output columns will be null.
 
     Args:
-        output_schema: Schema for output columns (StructType or DDL string like "col1 INT, col2 STRING")
+        returnType: Schema for output columns (StructType or DDL string like "col1 INT, col2 STRING").
+                    Named to match PySpark's @udtf decorator parameter.
         init_fn: Optional. Called once per partition to initialize resources. Receives a FdtfContext
                  object - set attributes on it (e.g., self.http = httpx.Client()).
         cleanup_fn: Optional. Called in terminate() to close resources. Receives the same FdtfContext.
@@ -270,7 +241,7 @@ def fdtf(
             self.http.close()
 
         @fdtf(
-            output_schema="result STRING, score FLOAT",
+            returnType="result STRING, score FLOAT",
             init_fn=my_init,
             cleanup_fn=my_cleanup,
             max_workers=10,
@@ -283,13 +254,13 @@ def fdtf(
         result_df = call_api(input_df, api_key="secret")
 
     Example without init_fn (simple signature):
-        @fdtf(output_schema="doubled INT", max_workers=None)
+        @fdtf(returnType="doubled INT", max_workers=None)
         def double_value(row):
             return (row["value"] * 2,)
 
         result_df = double_value(input_df)
     """
-    parsed_schema = _parse_schema(output_schema)
+    parsed_schema = _parse_schema(returnType)
     has_init_fn = init_fn is not None
     include_metadata = metadata_column is not None
 
@@ -321,6 +292,36 @@ def fdtf(
             captured_include_metadata = include_metadata
             num_user_output_cols = len(user_output_cols)
 
+            # Define helper functions locally to avoid cloudpickle module reference issues.
+            # When cloudpickle serializes the UDTF class, it would otherwise record these
+            # as module references (e.g., pyspark_toolkit.udtf._as_dict). On unpickling,
+            # Python would try to import pyspark_toolkit, which fails in Databricks Connect
+            # because withDependencies() installs packages at query execution time, but UDTF
+            # analysis happens before execution begins.
+
+            class _LocalFdtfContext:
+                """Local context class to avoid cloudpickle module reference issues."""
+
+                pass
+
+            def _local_as_dict(r):
+                return r.asDict(recursive=True) if hasattr(r, "asDict") else dict(r)
+
+            def _local_ensure_tuple(value: Any) -> Tuple[Any, ...]:
+                if isinstance(value, tuple):
+                    return value
+                return (value,)
+
+            def _local_is_generator(value: Any) -> bool:
+                return isinstance(value, (GeneratorType, Iterator)) and not isinstance(value, (str, bytes))
+
+            def _local_normalize_result(value: Any) -> Iterable[Tuple[Any, ...]]:
+                if _local_is_generator(value):
+                    for item in value:
+                        yield _local_ensure_tuple(item)
+                else:
+                    yield _local_ensure_tuple(value)
+
             @dataclass
             class _Analyze(AnalyzeResult):
                 pass
@@ -328,7 +329,7 @@ def fdtf(
             @udtf
             class _FdtfUDTF:
                 def __init__(self, analyze_result: Optional[AnalyzeResult] = None):
-                    self.ctx = FdtfContext()
+                    self.ctx = _LocalFdtfContext()
                     if captured_init_fn is not None:
                         captured_init_fn(self.ctx)
 
@@ -375,7 +376,7 @@ def fdtf(
                                 result = captured_fn(row_dict, *arg_vals, **kw_vals)  # type: ignore[call-arg]
 
                             # Normalize result to list of tuples (handles generators and single values)
-                            results = list(_normalize_result(result))
+                            results = list(_local_normalize_result(result))
 
                             duration_ms = int((time.perf_counter() - start_time) * 1000)
                             # Success: record attempt with no error
@@ -427,7 +428,7 @@ def fdtf(
                         return output_rows
 
                 def eval(self, row):
-                    d = _as_dict(row)
+                    d = _local_as_dict(row)
                     arg_vals = [d.get(a) for a in arg_names]
                     kw_vals = {k: d.get(k) for k in kwarg_names}
                     base_vals = tuple(d.get(c) for c in base_cols)

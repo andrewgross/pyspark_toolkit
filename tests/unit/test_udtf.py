@@ -64,7 +64,7 @@ def test_fdtf_basic_concurrent_execution(spark):
         pass
 
     @fdtf(
-        output_schema="doubled INT",
+        returnType="doubled INT",
         init_fn=my_init,
         cleanup_fn=my_cleanup,
         max_workers=2,
@@ -97,7 +97,7 @@ def test_fdtf_without_init_fn(spark):
     df = spark.createDataFrame([(1,), (2,), (3,)], ["id"])
 
     # and I have a fdtf function without init_fn
-    @fdtf(output_schema="doubled INT", max_workers=2)
+    @fdtf(returnType="doubled INT", max_workers=2)
     def double_id(self, row):  # noqa: ARG001
         return (row["id"] * 2,)
 
@@ -122,7 +122,7 @@ def test_fdtf_metadata_contains_execution_details(spark):
     df = spark.createDataFrame([(1,)], ["id"])
 
     # and I have a fdtf function
-    @fdtf(output_schema="result INT", max_workers=1)
+    @fdtf(returnType="result INT", max_workers=1)
     def process(self, row):  # noqa: ARG001
         return (42,)
 
@@ -156,7 +156,7 @@ def test_fdtf_preserves_all_input_columns(spark):
     )
 
     # and I have a fdtf function
-    @fdtf(output_schema="flag STRING", max_workers=2)
+    @fdtf(returnType="flag STRING", max_workers=2)
     def add_flag(self, row):  # noqa: ARG001
         return ("ok",)
 
@@ -181,7 +181,7 @@ def test_fdtf_with_positional_args(spark):
     df = spark.createDataFrame([(1,), (2,)], ["id"])
 
     # and I have a fdtf function that uses positional args
-    @fdtf(output_schema="result INT", max_workers=2)
+    @fdtf(returnType="result INT", max_workers=2)
     def add_args(self, row, arg1, arg2):  # noqa: ARG001
         return (row["id"] + arg1 + arg2,)
 
@@ -204,7 +204,7 @@ def test_fdtf_with_keyword_args(spark):
     df = spark.createDataFrame([(1,), (2,)], ["id"])
 
     # and I have a fdtf function that uses kwargs
-    @fdtf(output_schema="result INT", max_workers=2)
+    @fdtf(returnType="result INT", max_workers=2)
     def compute(self, row, multiplier=1, offset=0):  # noqa: ARG001
         return (row["id"] * multiplier + offset,)
 
@@ -227,7 +227,7 @@ def test_fdtf_error_handling_captures_exceptions(spark):
     df = spark.createDataFrame([(1,), (2,)], ["id"])
 
     # and I have a fdtf function that raises an error for some rows
-    @fdtf(output_schema="result INT", max_workers=2)
+    @fdtf(returnType="result INT", max_workers=2)
     def may_fail(self, row):  # noqa: ARG001
         if row["id"] == 1:
             raise ValueError("Simulated error")
@@ -265,7 +265,7 @@ def test_fdtf_with_max_retries_retries_on_failure(spark):
         self.attempt_count = 0
 
     @fdtf(
-        output_schema="result INT",
+        returnType="result INT",
         init_fn=my_init,
         max_workers=1,
         max_retries=3,
@@ -302,7 +302,7 @@ def test_fdtf_with_max_retries_fails_after_exhausting_retries(spark):
 
     # and I have a fdtf function that always fails
     @fdtf(
-        output_schema="result INT",
+        returnType="result INT",
         max_workers=1,
         max_retries=2,
     )
@@ -335,7 +335,7 @@ def test_fdtf_no_retry_by_default(spark):
 
     # and I have a fdtf function that fails (using default max_retries=0)
     @fdtf(
-        output_schema="result INT",
+        returnType="result INT",
         max_workers=1,
     )
     def fails_immediately(self, row):  # noqa: ARG001
@@ -367,7 +367,7 @@ def test_fdtf_resources_passed_to_function(spark):
 
     # and I have a fdtf function that uses self attributes
     @fdtf(
-        output_schema="computed STRING",
+        returnType="computed STRING",
         init_fn=my_init,
         max_workers=2,
     )
@@ -394,7 +394,7 @@ def test_fdtf_with_ddl_string_schema(spark):
     df = spark.createDataFrame([(1,), (2,)], ["id"])
 
     # and I have a fdtf function with DDL string schema
-    @fdtf(output_schema="doubled INT, label STRING", max_workers=2)
+    @fdtf(returnType="doubled INT, label STRING", max_workers=2)
     def transform(self, row):  # noqa: ARG001
         return (row["id"] * 2, f"row_{row['id']}")
 
@@ -420,7 +420,7 @@ def test_fdtf_output_schema_structure(spark):
 
     # and I have a fdtf function
     @fdtf(
-        output_schema=StructType(
+        returnType=StructType(
             [
                 StructField("result", IntegerType()),
                 StructField("label", StringType()),
@@ -472,7 +472,7 @@ def test_fdtf_with_empty_dataframe(spark):
     df = spark.createDataFrame([], schema)
 
     # and I have a fdtf function
-    @fdtf(output_schema="result INT", max_workers=2)
+    @fdtf(returnType="result INT", max_workers=2)
     def process(self, row):  # noqa: ARG001
         return (42,)
 
@@ -501,7 +501,7 @@ def test_fdtf_with_max_retries_retries_any_exception(spark):
         self.attempt_count = 0
 
     @fdtf(
-        output_schema="result INT",
+        returnType="result INT",
         init_fn=my_init,
         max_workers=1,
         max_retries=2,
@@ -536,7 +536,7 @@ def test_fdtf_zero_retries_fails_immediately(spark):
     df = spark.createDataFrame([(1,)], ["id"])
 
     # and I have a fdtf function with max_retries=0 (the default)
-    @fdtf(output_schema="result INT", max_workers=1, max_retries=0)
+    @fdtf(returnType="result INT", max_workers=1, max_retries=0)
     def fails_once(self, row):  # noqa: ARG001
         raise Exception("Service Unavailable")
 
@@ -561,7 +561,7 @@ def test_fdtf_with_single_value_return(spark):
     df = spark.createDataFrame([(1,), (2,), (3,)], ["id"])
 
     # and I have a fdtf function that returns a single value (not a tuple)
-    @fdtf(output_schema="doubled INT", max_workers=2)
+    @fdtf(returnType="doubled INT", max_workers=2)
     def double_value(self, row):  # noqa: ARG001
         return row["id"] * 2  # returns int, not (int,)
 
@@ -586,7 +586,7 @@ def test_fdtf_with_single_string_value_return(spark):
     df = spark.createDataFrame([(1, "hello"), (2, "world")], ["id", "value"])
 
     # and I have a fdtf function that returns a single string value
-    @fdtf(output_schema="upper STRING", max_workers=2)
+    @fdtf(returnType="upper STRING", max_workers=2)
     def upper_value(self, row):  # noqa: ARG001
         return row["value"].upper()  # returns str, not (str,)
 
@@ -609,7 +609,7 @@ def test_fdtf_with_tuple_return_still_works(spark):
     df = spark.createDataFrame([(1,), (2,)], ["id"])
 
     # and I have a fdtf function that returns an explicit tuple
-    @fdtf(output_schema="doubled INT", max_workers=2)
+    @fdtf(returnType="doubled INT", max_workers=2)
     def double_value(self, row):  # noqa: ARG001
         return (row["id"] * 2,)  # explicit tuple
 
@@ -632,7 +632,7 @@ def test_fdtf_with_multi_column_tuple_return(spark):
     df = spark.createDataFrame([(1, "a"), (2, "b")], ["id", "value"])
 
     # and I have a fdtf function that returns multiple columns
-    @fdtf(output_schema="doubled INT, upper STRING", max_workers=2)
+    @fdtf(returnType="doubled INT, upper STRING", max_workers=2)
     def transform(self, row):  # noqa: ARG001
         return (row["id"] * 2, row["value"].upper())
 
@@ -660,7 +660,7 @@ def test_fdtf_with_custom_metadata_column_name(spark):
     df = spark.createDataFrame([(1,)], ["id"])
 
     # and I have a fdtf function with custom metadata column name
-    @fdtf(output_schema="result INT", max_workers=1, metadata_column="execution_info")
+    @fdtf(returnType="result INT", max_workers=1, metadata_column="execution_info")
     def process(self, row):  # noqa: ARG001
         return (42,)
 
@@ -694,7 +694,7 @@ def test_fdtf_with_custom_metadata_column_has_correct_data(spark):
 
     # and I have a fdtf function with custom metadata column that fails
     @fdtf(
-        output_schema="result INT",
+        returnType="result INT",
         max_workers=1,
         metadata_column="meta",
     )
@@ -737,7 +737,7 @@ def test_fdtf_concurrent_execution_with_shared_client(spark):
 
     # and I have a fdtf function that simulates work and tracks concurrency
     @fdtf(
-        output_schema="result INT",
+        returnType="result INT",
         init_fn=my_init,
         max_workers=5,
     )
@@ -810,7 +810,7 @@ def test_fdtf_shared_http_client_simulation(spark):
         pass
 
     @fdtf(
-        output_schema="api_response STRING",
+        returnType="api_response STRING",
         init_fn=my_init,
         cleanup_fn=my_cleanup,
         max_workers=3,
@@ -853,7 +853,7 @@ def test_fdtf_thread_safety_with_shared_state(spark):
         self.processed_ids = []
 
     @fdtf(
-        output_schema="squared INT",
+        returnType="squared INT",
         init_fn=my_init,
         max_workers=10,
     )
@@ -895,7 +895,7 @@ def test_fdtf_sequential_execution_with_max_workers_none(spark):
     )
 
     # and I have a fdtf function with max_workers=None
-    @fdtf(output_schema="doubled INT", max_workers=None)
+    @fdtf(returnType="doubled INT", max_workers=None)
     def double_id(self, row):  # noqa: ARG001
         return (row["id"] * 2,)
 
@@ -924,7 +924,7 @@ def test_fdtf_sequential_execution_with_max_workers_zero(spark):
     df = spark.createDataFrame([(1,), (2,)], ["id"])
 
     # and I have a fdtf function with max_workers=0
-    @fdtf(output_schema="squared INT", max_workers=0)
+    @fdtf(returnType="squared INT", max_workers=0)
     def square_id(self, row):  # noqa: ARG001
         return (row["id"] ** 2,)
 
@@ -956,7 +956,7 @@ def test_fdtf_sequential_with_init_and_cleanup(spark):
 
     # and I have a fdtf function with max_workers=None
     @fdtf(
-        output_schema="result INT",
+        returnType="result INT",
         init_fn=my_init,
         cleanup_fn=my_cleanup,
         max_workers=None,
@@ -987,7 +987,7 @@ def test_fdtf_sequential_with_retries(spark):
         self.attempt_count = 0
 
     @fdtf(
-        output_schema="result INT",
+        returnType="result INT",
         init_fn=my_init,
         max_workers=None,
         max_retries=2,
@@ -1022,7 +1022,7 @@ def test_fdtf_sequential_error_handling(spark):
     df = spark.createDataFrame([(1,), (2,)], ["id"])
 
     # and I have a function that fails for some rows
-    @fdtf(output_schema="result INT", max_workers=None)
+    @fdtf(returnType="result INT", max_workers=None)
     def may_fail(self, row):  # noqa: ARG001
         if row["id"] == 1:
             raise ValueError("Simulated error")
@@ -1053,7 +1053,7 @@ def test_fdtf_sequential_preserves_row_order(spark):
     df = spark.createDataFrame([(3,), (1,), (2,)], ["id"])
 
     # and I have a fdtf function with max_workers=None
-    @fdtf(output_schema="doubled INT", max_workers=None)
+    @fdtf(returnType="doubled INT", max_workers=None)
     def double_id(self, row):  # noqa: ARG001
         return (row["id"] * 2,)
 
@@ -1080,7 +1080,7 @@ def test_fdtf_sequential_with_args_and_kwargs(spark):
     df = spark.createDataFrame([(1,), (2,)], ["id"])
 
     # and I have a fdtf function that uses args and kwargs
-    @fdtf(output_schema="result INT", max_workers=None)
+    @fdtf(returnType="result INT", max_workers=None)
     def compute(self, row, multiplier, offset=0):  # noqa: ARG001
         return (row["id"] * multiplier + offset,)
 
@@ -1200,7 +1200,7 @@ def test_fdtf_without_self_parameter(spark):
     df = spark.createDataFrame([(1,), (2,), (3,)], ["id"])
 
     # and I have a fdtf function without self parameter
-    @fdtf(output_schema="doubled INT", max_workers=2)
+    @fdtf(returnType="doubled INT", max_workers=2)
     def double_id(row):
         return (row["id"] * 2,)
 
@@ -1225,7 +1225,7 @@ def test_fdtf_without_self_with_args(spark):
     df = spark.createDataFrame([(1,), (2,)], ["id"])
 
     # and I have a fdtf function without self that uses args
-    @fdtf(output_schema="result INT", max_workers=2)
+    @fdtf(returnType="result INT", max_workers=2)
     def add_values(row, arg1, arg2):
         return (row["id"] + arg1 + arg2,)
 
@@ -1248,7 +1248,7 @@ def test_fdtf_without_self_with_kwargs(spark):
     df = spark.createDataFrame([(1,), (2,)], ["id"])
 
     # and I have a fdtf function without self that uses kwargs
-    @fdtf(output_schema="result INT", max_workers=2)
+    @fdtf(returnType="result INT", max_workers=2)
     def compute(row, multiplier=1, offset=0):
         return (row["id"] * multiplier + offset,)
 
@@ -1276,7 +1276,7 @@ def test_fdtf_with_init_fn_requires_self_in_decorated_function(spark):
     # then it should raise TypeError at decoration time
     with pytest.raises(TypeError) as exc_info:
 
-        @fdtf(output_schema="result INT", init_fn=my_init)
+        @fdtf(returnType="result INT", init_fn=my_init)
         def missing_self(row):
             return (row["id"],)
 
@@ -1293,7 +1293,7 @@ def test_fdtf_without_self_sequential_execution(spark):
     df = spark.createDataFrame([(1,), (2,), (3,)], ["id"])
 
     # and I have a fdtf function without self and max_workers=None
-    @fdtf(output_schema="squared INT", max_workers=None)
+    @fdtf(returnType="squared INT", max_workers=None)
     def square_id(row):
         return (row["id"] ** 2,)
 
@@ -1320,7 +1320,7 @@ def test_fdtf_without_self_error_handling(spark):
     df = spark.createDataFrame([(1,), (2,)], ["id"])
 
     # and I have a fdtf function without self that raises an error
-    @fdtf(output_schema="result INT", max_workers=2)
+    @fdtf(returnType="result INT", max_workers=2)
     def may_fail(row):
         if row["id"] == 1:
             raise ValueError("Simulated error")
@@ -1355,7 +1355,7 @@ def test_fdtf_with_metadata_column_none_disables_metadata(spark):
     df = spark.createDataFrame([(1,), (2,), (3,)], ["id"])
 
     # and I have a fdtf function with metadata_column=None
-    @fdtf(output_schema="doubled INT", max_workers=None, metadata_column=None)
+    @fdtf(returnType="doubled INT", max_workers=None, metadata_column=None)
     def double_id(row):
         return (row["id"] * 2,)
 
@@ -1385,7 +1385,7 @@ def test_fdtf_with_metadata_column_none_with_concurrent_execution(spark):
     df = spark.createDataFrame([(1,), (2,), (3,)], ["id"])
 
     # and I have a fdtf function with max_workers and metadata_column=None
-    @fdtf(output_schema="doubled INT", max_workers=2, metadata_column=None)
+    @fdtf(returnType="doubled INT", max_workers=2, metadata_column=None)
     def double_id(row):
         return (row["id"] * 2,)
 
@@ -1417,7 +1417,7 @@ def test_fdtf_with_metadata_column_none_with_init_fn(spark):
     def my_init(self):
         self.multiplier = 10
 
-    @fdtf(output_schema="result INT", init_fn=my_init, max_workers=None, metadata_column=None)
+    @fdtf(returnType="result INT", init_fn=my_init, max_workers=None, metadata_column=None)
     def multiply(self, row):
         return (row["id"] * self.multiplier,)
 
@@ -1445,7 +1445,7 @@ def test_fdtf_with_metadata_column_none_error_returns_null(spark):
     df = spark.createDataFrame([(1,), (2,)], ["id"])
 
     # and I have a fdtf function that fails for some rows
-    @fdtf(output_schema="result INT", max_workers=None, metadata_column=None)
+    @fdtf(returnType="result INT", max_workers=None, metadata_column=None)
     def may_fail(row):
         if row["id"] == 1:
             raise ValueError("Simulated error")
@@ -1480,7 +1480,7 @@ def test_fdtf_with_generator_yields_multiple_rows(spark):
     df = spark.createDataFrame([(1, "a")], ["id", "value"])
 
     # and I have a fdtf function that yields multiple rows
-    @fdtf(output_schema="iteration INT", max_workers=None, metadata_column=None)
+    @fdtf(returnType="iteration INT", max_workers=None, metadata_column=None)
     def explode_rows(row):  # noqa: ARG001
         for i in range(3):
             yield (i,)
@@ -1508,7 +1508,7 @@ def test_fdtf_with_generator_multiple_input_rows(spark):
     df = spark.createDataFrame([(1,), (2,)], ["id"])
 
     # and I have a fdtf function that yields multiple rows based on id
-    @fdtf(output_schema="value INT", max_workers=None, metadata_column=None)
+    @fdtf(returnType="value INT", max_workers=None, metadata_column=None)
     def explode_by_id(row):
         for i in range(row["id"]):
             yield (i,)
@@ -1537,7 +1537,7 @@ def test_fdtf_with_generator_and_metadata(spark):
     df = spark.createDataFrame([(1,)], ["id"])
 
     # and I have a fdtf function that yields multiple rows with metadata enabled
-    @fdtf(output_schema="value INT", max_workers=None)
+    @fdtf(returnType="value INT", max_workers=None)
     def explode_rows(row):  # noqa: ARG001
         for i in range(2):
             yield (i,)
@@ -1564,7 +1564,7 @@ def test_fdtf_with_generator_concurrent_execution(spark):
     df = spark.createDataFrame([(1,), (2,), (3,)], ["id"])
 
     # and I have a fdtf function that yields multiple rows
-    @fdtf(output_schema="doubled INT", max_workers=2, metadata_column=None)
+    @fdtf(returnType="doubled INT", max_workers=2, metadata_column=None)
     def explode_doubled(row):
         yield (row["id"] * 2,)
         yield (row["id"] * 2 + 1,)
@@ -1591,7 +1591,7 @@ def test_fdtf_with_generator_empty_yield(spark):
     df = spark.createDataFrame([(1,), (2,), (3,)], ["id"])
 
     # and I have a fdtf function that only yields for even ids
-    @fdtf(output_schema="value INT", max_workers=None, metadata_column=None)
+    @fdtf(returnType="value INT", max_workers=None, metadata_column=None)
     def filter_even(row):
         if row["id"] % 2 == 0:
             yield (row["id"],)
@@ -1620,7 +1620,7 @@ def test_fdtf_with_generator_error_retries(spark):
     def my_init(self):
         self.attempt_count = 0
 
-    @fdtf(output_schema="value INT", init_fn=my_init, max_workers=None, max_retries=2)
+    @fdtf(returnType="value INT", init_fn=my_init, max_workers=None, max_retries=2)
     def flaky_generator(self, row):  # noqa: ARG001
         self.attempt_count += 1
         if self.attempt_count < 2:
@@ -1652,7 +1652,7 @@ def test_fdtf_mixed_return_and_yield_single_value(spark):
     df = spark.createDataFrame([(1,), (2,)], ["id"])
 
     # and I have a fdtf function that returns (not yields)
-    @fdtf(output_schema="doubled INT", max_workers=None, metadata_column=None)
+    @fdtf(returnType="doubled INT", max_workers=None, metadata_column=None)
     def double_value(row):
         return (row["id"] * 2,)
 
