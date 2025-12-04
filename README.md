@@ -246,7 +246,7 @@ from pyspark_toolkit.udtf import fdtf
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType
 
 # Basic usage: add a computed column
-@fdtf(output_schema="doubled INT")
+@fdtf(returnType="doubled INT")
 def add_doubled(row):
     yield (row["id"] * 2,)
 
@@ -256,15 +256,15 @@ result = add_doubled(df)
 #         id=2, value="b", doubled=4
 
 # Multiple output columns using DDL string
-@fdtf(output_schema="doubled INT, upper_value STRING")
+@fdtf(returnType="doubled INT, upper_value STRING")
 def transform(row):
     yield (row["id"] * 2, row["value"].upper())
 
 result = transform(df)
 # Result: id=1, value="a", doubled=2, upper_value="A"
 
-# Using StructType for output schema
-@fdtf(output_schema=StructType([
+# Using StructType for returnType
+@fdtf(returnType=StructType([
     StructField("computed", IntegerType()),
     StructField("label", StringType()),
 ]))
@@ -272,7 +272,7 @@ def compute(row):
     yield (row["id"] + 100, f"item_{row['id']}")
 
 # Pass arguments to the function
-@fdtf(output_schema="result INT")
+@fdtf(returnType="result INT")
 def add_with_args(row, multiplier, offset=0):
     yield (row["id"] * multiplier + offset,)
 
@@ -281,7 +281,7 @@ result = add_with_args(df, 10, offset=5)
 #         id=2, value="b", result=25  (2 * 10 + 5)
 
 # Yield multiple rows per input (explode behavior)
-@fdtf(output_schema="iteration INT")
+@fdtf(returnType="iteration INT")
 def explode_rows(row):
     for i in range(row["id"]):
         yield (i,)
@@ -290,7 +290,7 @@ result = explode_rows(df)
 # Input row with id=2 produces 2 output rows (iteration=0, iteration=1)
 
 # Use with_single_partition for operations requiring all data in one partition
-@fdtf(output_schema="rank INT", with_single_partition=True)
+@fdtf(returnType="rank INT", with_single_partition=True)
 def add_rank(row):
     yield (1,)  # In practice, you'd compute rank across all rows
 
@@ -303,7 +303,7 @@ def cleanup_resources(ctx):
     ctx.http.close()
 
 @fdtf(
-    output_schema="response STRING",
+    returnType="response STRING",
     init_fn=init_resources,
     cleanup_fn=cleanup_resources,
     max_workers=10,
@@ -316,7 +316,7 @@ result = fetch_data(df)
 
 # Retry logic and metadata tracking
 @fdtf(
-    output_schema="result STRING",
+    returnType="result STRING",
     max_retries=3,  # Retry up to 3 times on failure
     metadata_column="_attempts",  # Custom metadata column name
 )
@@ -328,7 +328,7 @@ result = flaky_operation(df)
 # _attempts is an array of: [{attempt: 1, started_at: ..., duration_ms: ..., error: null}]
 
 # Disable metadata tracking for simpler output
-@fdtf(output_schema="doubled INT", metadata_column=None)
+@fdtf(returnType="doubled INT", metadata_column=None)
 def simple_double(row):
     return (row["id"] * 2,)
 

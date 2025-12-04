@@ -1,5 +1,15 @@
 # Changelog
 
+## [2025-12-04] - Version 0.7.0
+
+### Breaking Changes
+
+- **FDTF Parameter Rename**: Renamed `output_schema` parameter to `returnType` in the `fdtf` decorator to match PySpark's `@udtf` decorator signature. Update your code: `@fdtf(output_schema="...")` becomes `@fdtf(returnType="...")`.
+
+### Bug Fixes
+
+- **Databricks Connect Compatibility**: Fixed cloudpickle serialization issues that caused `ModuleNotFoundError: No module named 'pyspark_toolkit'` when using `fdtf` with Databricks Connect. Helper functions and context classes are now defined locally inside the runner to avoid module reference issues during unpickling.
+
 ## [2025-12-03] - Version 0.6.0
 
 ### Features
@@ -23,6 +33,7 @@
 
 - **Test Coverage**: Expanded test suite with comprehensive coverage for concurrent execution, retry behavior, resource lifecycle, and error handling scenarios. (73c4c4e, 94f54f5)
 - **Code Consolidation**: Unified CDTF and FDTF implementations under a single consistent API, simplifying the codebase while maintaining backward compatibility. (94f54f5)
+
 
 ## [2025-12-02] - Version 0.5.0
 
