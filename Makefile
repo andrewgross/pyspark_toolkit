@@ -51,7 +51,7 @@ test-reset: clean test
 
 build: clean
 	@echo "Building package..."
-	uv build
+	@uv build
 	@echo "Build complete!"
 
 
@@ -59,7 +59,7 @@ publish: build
 	@echo "Validating release state..."
 	@git diff --quiet || (echo "Error: Working directory has uncommitted changes" && exit 1)
 	@git diff --cached --quiet || (echo "Error: Working directory has staged changes" && exit 1)
-	@VERSION=$$(python -c "from src.pyspark_toolkit import __version__; print(__version__)") && \
+	@VERSION=$$(uv run python -c "from src.pyspark_toolkit import __version__; print(__version__)") && \
 		if git rev-parse "$$VERSION" >/dev/null 2>&1; then \
 			echo "Tag $$VERSION already exists, verifying HEAD is at tag..."; \
 			TAG_COMMIT=$$(git rev-list -n 1 "$$VERSION") && \
