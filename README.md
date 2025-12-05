@@ -295,12 +295,12 @@ def add_rank(row):
     yield (1,)  # In practice, you'd compute rank across all rows
 
 # Resource management with init_fn/cleanup_fn
-def init_resources(ctx):
+def init_resources(self):
     import httpx
-    ctx.http = httpx.Client(timeout=30)
+    self.http = httpx.Client(timeout=30)
 
-def cleanup_resources(ctx):
-    ctx.http.close()
+def cleanup_resources(self):
+    self.http.close()
 
 @fdtf(
     returnType="response STRING",

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from types import GeneratorType
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Concatenate,
@@ -16,10 +17,12 @@ from typing import (
     List,
     Optional,
     ParamSpec,
+    Protocol,
     Tuple,
     TypeVar,
     Union,
     cast,
+    runtime_checkable,
 )
 
 from pyspark.sql import DataFrame
@@ -151,32 +154,31 @@ def _parse_schema(schema: Union[StructType, str]) -> StructType:
     raise TypeError(f"output_schema must be a StructType or DDL string, got {type(schema).__name__}")
 
 
-class FdtfContext:
+@runtime_checkable
+class FdtfContext(Protocol):
     """
-    Context object passed to fdtf functions.
+    Protocol for the context object passed to fdtf functions.
 
     Your init_fn should set attributes on this object, which will then be
-    accessible in your processing function via self.
+    accessible in your processing function via the first parameter (conventionally
+    named ``self``). All attributes are dynamically typed as Any.
+
+    This is a Protocol (structural type), not a concrete class. The actual
+    context object is created internally by fdtf. Any object with dynamic
+    attribute access satisfies this protocol.
 
     Example:
-        def my_init(self):
+        def my_init(self: FdtfContext) -> None:
             self.http = httpx.Client(timeout=30)
-            self.api_client = SomeAPIClient()
-
-        def my_cleanup(self):
-            self.http.close()
+            self.api_key = "secret"
 
         @fdtf(...)
-        def call_api(self, row, api_key):
-            return (self.api_client.call(row["input"], key=api_key),)
+        def call_api(self: FdtfContext, row: dict) -> tuple:
+            return (self.http.get(row["url"]).text,)
     """
 
-    pass
-
-
-# Keep a module-level reference for external use (e.g., type hints)
-# The UDTF uses a local copy to avoid cloudpickle serialization issues
-_FdtfContextClass = FdtfContext
+    def __getattr__(self, name: str) -> Any: ...
+    def __setattr__(self, name: str, value: Any) -> None: ...
 
 
 def fdtf(
@@ -233,11 +235,11 @@ def fdtf(
         - Generator: yield (val1,); yield (val2,)  (multiple output rows per input)
 
     Example with init/cleanup and concurrency:
-        def my_init(self):
+        def my_init(self: FdtfContext) -> None:
             self.http = httpx.Client(timeout=30)
             self.api_client = SomeAPIClient()
 
-        def my_cleanup(self):
+        def my_cleanup(self: FdtfContext) -> None:
             self.http.close()
 
         @fdtf(
@@ -302,7 +304,10 @@ def fdtf(
             class _LocalFdtfContext:
                 """Local context class to avoid cloudpickle module reference issues."""
 
-                pass
+                if TYPE_CHECKING:
+
+                    def __getattr__(self, name: str) -> Any: ...
+                    def __setattr__(self, name: str, value: Any) -> None: ...
 
             def _local_as_dict(r):
                 return r.asDict(recursive=True) if hasattr(r, "asDict") else dict(r)
