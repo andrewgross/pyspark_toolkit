@@ -1,5 +1,15 @@
 # Changelog
 
+## [2025-12-05] - Version 0.8.0
+
+### Enhancements
+
+- **Type Checking Improvements**: Converted FdtfContext from a concrete class to a Protocol (structural type) for better type checker compatibility. This allows dynamic attribute access on context objects without pyright errors while maintaining runtime type checking. (9a73ecf)
+
+### Documentation
+
+- **Consistent Parameter Naming**: Updated documentation to consistently use 'self' as the conventional parameter name for the FdtfContext object, matching patterns used throughout tests and improving code readability. (9a73ecf)
+
 ## [2025-12-04] - Version 0.7.0
 
 ### Breaking Changes
