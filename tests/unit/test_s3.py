@@ -33,12 +33,12 @@ def test_generate_presigned_url_returns_dataframe_with_output_column(spark):
     # and I generate a presigned URL
     result = generate_presigned_url(
         df,
-        bucket_col="bucket",
-        key_col="key",
-        aws_access_key_col="access_key",
-        aws_secret_key_col="secret_key",
-        region_col="region",
-        expiration_col="expiration",
+        bucket="bucket",
+        key="key",
+        aws_access_key="access_key",
+        aws_secret_key="secret_key",
+        region="region",
+        expiration="expiration",
     )
 
     # then the result should have the presigned_url column
@@ -71,12 +71,12 @@ def test_generate_presigned_url_custom_output_column(spark):
     # and I generate a presigned URL with a custom output column name
     result = generate_presigned_url(
         df,
-        bucket_col="bucket",
-        key_col="key",
-        aws_access_key_col="access_key",
-        aws_secret_key_col="secret_key",
-        region_col="region",
-        expiration_col="expiration",
+        bucket="bucket",
+        key="key",
+        aws_access_key="access_key",
+        aws_secret_key="secret_key",
+        region="region",
+        expiration="expiration",
         output_col="my_url",
     )
 
@@ -107,12 +107,12 @@ def test_generate_presigned_url_format_is_valid(spark):
     # and I generate a presigned URL
     result = generate_presigned_url(
         df,
-        bucket_col="bucket",
-        key_col="key",
-        aws_access_key_col="access_key",
-        aws_secret_key_col="secret_key",
-        region_col="region",
-        expiration_col="expiration",
+        bucket="bucket",
+        key="key",
+        aws_access_key="access_key",
+        aws_secret_key="secret_key",
+        region="region",
+        expiration="expiration",
     )
 
     # then the URL should have the correct format
@@ -167,12 +167,12 @@ def test_generate_presigned_url_preserves_original_columns(spark):
     # and I generate a presigned URL
     result = generate_presigned_url(
         df,
-        bucket_col="bucket",
-        key_col="key",
-        aws_access_key_col="access_key",
-        aws_secret_key_col="secret_key",
-        region_col="region",
-        expiration_col="expiration",
+        bucket="bucket",
+        key="key",
+        aws_access_key="access_key",
+        aws_secret_key="secret_key",
+        region="region",
+        expiration="expiration",
     )
 
     # then all original columns should be preserved
@@ -201,12 +201,12 @@ def test_generate_presigned_url_handles_multiple_rows(spark):
     # and I generate presigned URLs
     result = generate_presigned_url(
         df,
-        bucket_col="bucket",
-        key_col="key",
-        aws_access_key_col="access_key",
-        aws_secret_key_col="secret_key",
-        region_col="region",
-        expiration_col="expiration",
+        bucket="bucket",
+        key="key",
+        aws_access_key="access_key",
+        aws_secret_key="secret_key",
+        region="region",
+        expiration="expiration",
     )
 
     # then each row should have a unique presigned URL
@@ -285,12 +285,12 @@ def test_generate_presigned_url_matches_boto3_signature(spark):
 
     result = generate_presigned_url(
         df,
-        bucket_col="bucket",
-        key_col="key",
-        aws_access_key_col="access_key",
-        aws_secret_key_col="secret_key",
-        region_col="region",
-        expiration_col="expiration",
+        bucket="bucket",
+        key="key",
+        aws_access_key="access_key",
+        aws_secret_key="secret_key",
+        region="region",
+        expiration="expiration",
     )
 
     pyspark_url = result.collect()[0]["presigned_url"]
@@ -322,6 +322,156 @@ def test_generate_presigned_url_matches_boto3_signature(spark):
 
 
 @freeze_time("2024-06-20 08:15:00", tz_offset=0)
+def test_generate_presigned_url_with_python_string_values(spark):
+    """
+    Test that generate_presigned_url works with python string values.
+
+    When a string doesn't match any column name, it should be treated as a literal value.
+    """
+    # when I have a DataFrame with only bucket and key columns
+    df = spark.createDataFrame(
+        [
+            ("my-bucket", "path/to/file.txt"),
+        ],
+        ["bucket", "key"],
+    )
+
+    # and I generate presigned URLs with literal values for credentials/region/expiration
+    result = generate_presigned_url(
+        df,
+        bucket="bucket",
+        key="key",
+        aws_access_key="AKIAIOSFODNN7EXAMPLE",
+        aws_secret_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        region="us-east-1",
+        expiration=3600,
+    )
+
+    # then the URL should be generated successfully
+    rows = result.collect()
+    assert len(rows) == 1
+
+    url = rows[0]["presigned_url"]
+    assert url.startswith("https://my-bucket.s3.us-east-1.amazonaws.com/")
+    assert "X-Amz-Algorithm=AWS4-HMAC-SHA256" in url
+    assert "X-Amz-Credential=AKIAIOSFODNN7EXAMPLE" in url
+    assert "X-Amz-Expires=3600" in url
+    assert "&X-Amz-Signature=" in url
+
+
+@freeze_time("2024-06-20 08:15:00", tz_offset=0)
+def test_generate_presigned_url_with_f_lit_values(spark):
+    """
+    Test that generate_presigned_url works with F.lit() Column objects.
+    """
+    from pyspark.sql import functions as F
+
+    # when I have a DataFrame with only bucket and key columns
+    df = spark.createDataFrame(
+        [
+            ("my-bucket", "path/to/file.txt"),
+        ],
+        ["bucket", "key"],
+    )
+
+    # and I generate presigned URLs with F.lit() for some values
+    result = generate_presigned_url(
+        df,
+        bucket="bucket",
+        key="key",
+        aws_access_key=F.lit("AKIAIOSFODNN7EXAMPLE"),
+        aws_secret_key=F.lit("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"),
+        region=F.lit("us-east-1"),
+        expiration=F.lit(3600),
+    )
+
+    # then the URL should be generated correctly
+    url = result.collect()[0]["presigned_url"]
+    assert url.startswith("https://my-bucket.s3.us-east-1.amazonaws.com/")
+    assert "X-Amz-Credential=AKIAIOSFODNN7EXAMPLE" in url
+    assert "X-Amz-Expires=3600" in url
+
+
+@freeze_time("2024-06-20 08:15:00", tz_offset=0)
+def test_generate_presigned_url_with_f_col_values(spark):
+    """
+    Test that generate_presigned_url works with F.col() Column objects.
+    """
+    from pyspark.sql import functions as F
+
+    # when I have a DataFrame with all values as columns
+    df = spark.createDataFrame(
+        [
+            (
+                "my-bucket",
+                "path/to/file.txt",
+                "AKIAIOSFODNN7EXAMPLE",
+                "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+                "us-east-1",
+                3600,
+            ),
+        ],
+        ["bucket", "key", "access_key", "secret_key", "region", "expiration"],
+    )
+
+    # and I generate presigned URLs with explicit F.col() references
+    result = generate_presigned_url(
+        df,
+        bucket=F.col("bucket"),
+        key=F.col("key"),
+        aws_access_key=F.col("access_key"),
+        aws_secret_key=F.col("secret_key"),
+        region=F.col("region"),
+        expiration=F.col("expiration"),
+    )
+
+    # then the URL should be generated correctly
+    url = result.collect()[0]["presigned_url"]
+    assert url.startswith("https://my-bucket.s3.us-east-1.amazonaws.com/")
+    assert "X-Amz-Credential=AKIAIOSFODNN7EXAMPLE" in url
+    assert "X-Amz-Expires=3600" in url
+
+
+@freeze_time("2024-06-20 08:15:00", tz_offset=0)
+def test_generate_presigned_url_with_mixed_input_types(spark):
+    """
+    Test that generate_presigned_url works with a mix of input types.
+
+    This tests the common use case where bucket/key come from columns
+    but credentials are literal values.
+    """
+    from pyspark.sql import functions as F
+
+    # when I have a DataFrame with bucket and key columns
+    df = spark.createDataFrame(
+        [
+            ("bucket-1", "file1.txt"),
+            ("bucket-2", "file2.txt"),
+        ],
+        ["bucket", "key"],
+    )
+
+    # and I generate presigned URLs mixing column refs, literals, and F.lit
+    result = generate_presigned_url(
+        df,
+        bucket="bucket",  # column name (string matching column)
+        key=F.col("key"),  # explicit F.col
+        aws_access_key="AKIAIOSFODNN7EXAMPLE",  # literal (no column match)
+        aws_secret_key=F.lit("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"),  # F.lit
+        region="us-east-1",  # literal (no column match)
+        expiration=3600,  # integer literal
+    )
+
+    # then URLs should be generated for each row
+    rows = result.collect()
+    assert len(rows) == 2
+
+    # and they should use the correct bucket from each row
+    assert rows[0]["presigned_url"].startswith("https://bucket-1.s3.us-east-1.amazonaws.com/file1.txt?")
+    assert rows[1]["presigned_url"].startswith("https://bucket-2.s3.us-east-1.amazonaws.com/file2.txt?")
+
+
+@freeze_time("2024-06-20 08:15:00", tz_offset=0)
 def test_generate_presigned_url_matches_boto3_with_special_characters(spark):
     """
     Test that our implementation handles special characters in keys correctly.
@@ -350,12 +500,12 @@ def test_generate_presigned_url_matches_boto3_with_special_characters(spark):
 
     result = generate_presigned_url(
         df,
-        bucket_col="bucket",
-        key_col="key",
-        aws_access_key_col="access_key",
-        aws_secret_key_col="secret_key",
-        region_col="region",
-        expiration_col="expiration",
+        bucket="bucket",
+        key="key",
+        aws_access_key="access_key",
+        aws_secret_key="secret_key",
+        region="region",
+        expiration="expiration",
     )
 
     pyspark_url = result.collect()[0]["presigned_url"]

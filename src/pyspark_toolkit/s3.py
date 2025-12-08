@@ -1,15 +1,41 @@
 from __future__ import annotations
 
 import datetime
+from typing import Union
 
-from pyspark.sql import DataFrame
+from pyspark.sql import Column, DataFrame
 from pyspark.sql import functions as F
+from pyspark.sql.column import Column
 
 from pyspark_toolkit.hmac import hmac_sha256
 from pyspark_toolkit.types import ByteColumn
 
+try:
+    from pyspark.sql.connect.column import Column as ConnectColumn
+except ImportError:
+    ConnectColumn = Column  # fallback for typing only
+
+_COLUMN = Union[Column, ConnectColumn]
+
 # Prefix for all intermediate columns to avoid collisions
 _TEMP_COL_PREFIX = "__s3_presign_"
+
+
+def _resolve_to_column(df: DataFrame, value: Union[str, int, _COLUMN]) -> _COLUMN:
+    """
+    Convert a value to a Column, handling strings, literals, and Column objects.
+
+    Resolution order:
+    1. If already a Column (F.col, F.lit, or expression), use directly
+    2. If string matching an existing column name, treat as column reference
+    3. Otherwise, treat as literal value
+    """
+    if isinstance(value, _COLUMN):
+        return value
+    elif isinstance(value, str) and value in df.columns:
+        return F.col(value)
+    else:
+        return F.lit(value)
 
 
 def _to_binary(col):
@@ -19,12 +45,12 @@ def _to_binary(col):
 
 def generate_presigned_url(
     df: DataFrame,
-    bucket_col: str,
-    key_col: str,
-    aws_access_key_col: str,
-    aws_secret_key_col: str,
-    region_col: str,
-    expiration_col: str,
+    bucket: Union[str, Column],
+    key: Union[str, Column],
+    aws_access_key: Union[str, Column],
+    aws_secret_key: Union[str, Column],
+    region: Union[str, Column],
+    expiration: Union[str, int, Column],
     output_col: str = "presigned_url",
 ) -> DataFrame:
     """
@@ -34,30 +60,56 @@ def generate_presigned_url(
     The computation is staged across multiple intermediate columns to avoid
     deep expression trees that can cause Spark's Catalyst optimizer to OOM.
 
+    Each parameter (except df and output_col) can be provided as:
+    - A string matching an existing column name (treated as column reference)
+    - A string not matching any column (treated as literal value)
+    - An integer (treated as literal value, for expiration)
+    - A Column object (F.col("name"), F.lit("value"), or any column expression)
+
     Args:
-        df: Input DataFrame containing the required columns.
-        bucket_col: Name of column containing S3 bucket names.
-        key_col: Name of column containing S3 object keys (paths).
-        aws_access_key_col: Name of column containing AWS access keys.
-        aws_secret_key_col: Name of column containing AWS secret keys (string, will be encoded).
-        region_col: Name of column containing AWS region names.
-        expiration_col: Name of column containing expiration times in seconds.
+        df: Input DataFrame.
+        bucket: S3 bucket name - column reference or literal value.
+        key: S3 object key (path) - column reference or literal value.
+        aws_access_key: AWS access key - column reference or literal value.
+        aws_secret_key: AWS secret key - column reference or literal value.
+        region: AWS region name - column reference or literal value.
+        expiration: Expiration time in seconds - column reference or literal value.
         output_col: Name of the output column for presigned URLs.
 
     Returns:
         DataFrame with the presigned URL column added.
 
     Example:
+        >>> # Using column references for bucket/key, literals for credentials
         >>> df = spark.createDataFrame([
-        ...     ("my-bucket", "path/to/file.txt", "AKIAIOSFODNN7EXAMPLE",
-        ...      "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", "us-east-1", 3600)
-        ... ], ["bucket", "key", "access_key", "secret_key", "region", "expiration"])
+        ...     ("my-bucket", "path/to/file.txt")
+        ... ], ["bucket", "key"])
         >>> result = generate_presigned_url(
-        ...     df, "bucket", "key", "access_key", "secret_key", "region", "expiration"
+        ...     df, "bucket", "key",
+        ...     aws_access_key="AKIAIOSFODNN7EXAMPLE",
+        ...     aws_secret_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        ...     region="us-east-1",
+        ...     expiration=3600
         ... )
     """
     # Define temp column names
     t = lambda name: f"{_TEMP_COL_PREFIX}{name}"
+
+    # Resolve all inputs to Column objects and store in temp columns
+    # This avoids repeating the resolution logic and keeps expressions simple
+    df = df.withColumns(
+        {
+            t("bucket"): _resolve_to_column(df, bucket),
+            t("key"): _resolve_to_column(df, key),
+            t("aws_access_key"): _resolve_to_column(df, aws_access_key),
+            t("aws_secret_key"): _resolve_to_column(df, aws_secret_key),
+            t("region"): _resolve_to_column(df, region),
+            t("expiration"): _resolve_to_column(df, expiration),
+        }
+    )
+    # Checkpoint the DataFrame to avoid repeated evaluation of the same expressions
+    # when using F.lit() values it explodes the expression tree and hangs execution
+    df = df.localCheckpoint(eager=False)
 
     # Stage 1: Timestamp values
 
@@ -82,10 +134,10 @@ def generate_presigned_url(
     df = df.withColumn(t("date_stamp"), F.date_format(F.col(t("now_utc")), "yyyyMMdd"))
 
     # Stage 2: URI and host components
-    df = df.withColumn(t("canonical_uri"), F.concat(F.lit("/"), F.col(key_col)))
+    df = df.withColumn(t("canonical_uri"), F.concat(F.lit("/"), F.col(t("key"))))
     df = df.withColumn(
         t("host"),
-        F.concat(F.col(bucket_col), F.lit(".s3."), F.col(region_col), F.lit(".amazonaws.com")),
+        F.concat(F.col(t("bucket")), F.lit(".s3."), F.col(t("region")), F.lit(".amazonaws.com")),
     )
     df = df.withColumn(
         t("endpoint"),
@@ -99,16 +151,16 @@ def generate_presigned_url(
         F.concat(
             F.lit("X-Amz-Algorithm=AWS4-HMAC-SHA256"),
             F.lit("&X-Amz-Credential="),
-            F.col(aws_access_key_col),
+            F.col(t("aws_access_key")),
             F.lit("%2F"),
             F.col(t("date_stamp")),
             F.lit("%2F"),
-            F.col(region_col),
+            F.col(t("region")),
             F.lit("%2Fs3%2Faws4_request"),
             F.lit("&X-Amz-Date="),
             F.col(t("amz_date")),
             F.lit("&X-Amz-Expires="),
-            F.col(expiration_col).cast("string"),
+            F.col(t("expiration")).cast("string"),
             F.lit("&X-Amz-SignedHeaders=host"),
         ),
     )
@@ -142,7 +194,7 @@ def generate_presigned_url(
         F.concat_ws(
             "/",
             F.col(t("date_stamp")),
-            F.col(region_col),
+            F.col(t("region")),
             F.lit("s3"),
             F.lit("aws4_request"),
         ),
@@ -168,7 +220,7 @@ def generate_presigned_url(
     # All inputs to HMAC must be binary - encode strings as UTF-8
     df = df.withColumn(
         t("key_prefix"),
-        _to_binary(F.concat(F.lit("AWS4"), F.col(aws_secret_key_col))),
+        _to_binary(F.concat(F.lit("AWS4"), F.col(t("aws_secret_key")))),
     )
 
     df = df.withColumn(
@@ -186,7 +238,7 @@ def generate_presigned_url(
 
     df = df.withColumn(
         t("region_bin"),
-        _to_binary(F.col(region_col)),
+        _to_binary(F.col(t("region"))),
     )
 
     df = df.withColumn(
@@ -240,7 +292,6 @@ def generate_presigned_url(
             F.lower(F.col(t("signature"))),
         ),
     )
-
     # Clean up intermediate columns
     temp_cols = [c for c in df.columns if c.startswith(_TEMP_COL_PREFIX)]
     df = df.drop(*temp_cols)
