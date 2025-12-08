@@ -1,5 +1,25 @@
 # Changelog
 
+## [2025-12-08] - Version 0.9.0
+
+### Features
+
+- **Flexible S3 URL Generation**: The `generate_presigned_url` function now accepts column references, literal values, and Column objects (F.col(), F.lit(), or expressions) for all parameters. This enables mixing static values like region="us-east-1" with dynamic column data in the same call. (bf56762)
+
+### Enhancements
+
+- **Simplified S3 API**: Removed `_col` suffix from `generate_presigned_url` parameter names for cleaner API. Parameters are now named `bucket`, `key`, `aws_access_key`, etc. instead of `bucket_col`, `key_col`, etc. The function intelligently resolves strings to either column references or literal values based on whether they match existing column names. (bf56762)
+- **Expression Tree Optimization**: Added `localCheckpoint` to prevent expression tree explosion when using literal values repeatedly in S3 presigned URL generation, improving performance and reliability. (bf56762)
+
+### Documentation
+
+- **Corrected S3 Examples**: Fixed README examples for `generate_presigned_url` to use correct parameter names and documented the flexible parameter resolution behavior (column references, literals, and Column objects). (beb36ed)
+- **Function Signature Fixes**: Corrected `explode_all_list_columns` example to match actual function signature. (beb36ed)
+
+### Internal
+
+- **Enhanced Test Coverage**: Added comprehensive tests for S3 module covering Python strings, F.lit(), F.col(), and mixed input types to ensure proper parameter resolution. (bf56762)
+
 ## [2025-12-05] - Version 0.8.0
 
 ### Enhancements
