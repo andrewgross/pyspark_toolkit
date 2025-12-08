@@ -175,7 +175,7 @@ df = spark.createDataFrame([
 
 # Parse JSON and explode all list columns simultaneously
 df = map_json_column(df, "json_col")
-df = explode_all_list_columns(df, ["users", "scores", "active"])
+df = explode_all_list_columns(df)  # Automatically processes all ArrayType columns
 # Result: Each array element gets its own row with matching indices
 
 # Clean complex nested JSON structures
@@ -199,41 +199,49 @@ df = df.withColumn("hmac", hmac_sha256(F.col("key"), F.col("message")))
 
 ### S3 Presigned URLs
 
-Generate AWS S3 presigned URLs for secure, time-limited access to S3 objects using AWS Signature Version 4:
+Generate AWS S3 presigned URLs for secure, time-limited access to S3 objects using AWS Signature Version 4.
+
+Each parameter can be provided as:
+- A string matching an existing column name (treated as column reference)
+- A string not matching any column (treated as literal value)
+- An integer (for expiration, treated as literal value)
+- A Column object (`F.col("name")`, `F.lit("value")`, or any column expression)
 
 ```python
 from pyspark_toolkit.s3 import generate_presigned_url
 
-# Create DataFrame with S3 object information and credentials
+# Example 1: All values from DataFrame columns
 df = spark.createDataFrame([
-    ("my-bucket", "path/to/file.txt", "AKIAIOSFODNN7EXAMPLE",
-     "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", "us-east-1", 3600),
-    ("my-bucket", "another/file.pdf", "AKIAIOSFODNN7EXAMPLE",
-     "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", "us-east-1", 7200),
-], ["bucket", "key", "access_key", "secret_key", "region", "expiration"])
+    ("my-bucket", "path/to/file.txt", "us-east-1", 3600),
+    ("my-bucket", "another/file.pdf", "us-west-2", 7200),
+], ["bucket", "key", "region", "expiration"])
 
-# Generate presigned URLs for each row
 result = generate_presigned_url(
     df,
-    bucket_col="bucket",
-    key_col="key",
-    aws_access_key_col="access_key",
-    aws_secret_key_col="secret_key",
-    region_col="region",
-    expiration_col="expiration",
+    bucket="bucket",           # column reference
+    key="key",                 # column reference
+    aws_access_key="AKIAIOSFODNN7EXAMPLE",  # literal (no column with this name)
+    aws_secret_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",  # literal
+    region="region",           # column reference
+    expiration="expiration",   # column reference
 )
 # Result: DataFrame with new "presigned_url" column containing signed URLs
 
-# Custom output column name
+# Example 2: Mix of column references and literal values
+df = spark.createDataFrame([
+    ("my-bucket", "path/to/file.txt"),
+    ("my-bucket", "another/file.pdf"),
+], ["bucket", "key"])
+
 result = generate_presigned_url(
     df,
-    bucket_col="bucket",
-    key_col="key",
-    aws_access_key_col="access_key",
-    aws_secret_key_col="secret_key",
-    region_col="region",
-    expiration_col="expiration",
-    output_col="signed_url",
+    bucket="bucket",
+    key="key",
+    aws_access_key="AKIAIOSFODNN7EXAMPLE",
+    aws_secret_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+    region="us-east-1",        # literal string
+    expiration=3600,           # literal integer
+    output_col="signed_url",   # custom output column name
 )
 ```
 
